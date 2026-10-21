@@ -64,7 +64,10 @@ npm run start
   The unit is treated as physically committed on every day in that window, so it cannot be double booked.
   This rule lives in `src/lib/dates.ts` (`billedDays` and `occupiedDays`).
 - Delivery zones and fees, and the damage waiver amount, are in `src/lib/pricing.ts`.
-- There is no login yet. Anyone who can reach the app can open `/admin`. Auth comes with hosting (see below).
+- `/admin` is behind a password login (`/admin/login`). Set `ADMIN_PASSWORD` and `SESSION_SECRET`
+  in `.env` (see `.env.example`) — without both, `/admin` refuses to serve anything. The session
+  is a signed, expiring cookie (`src/lib/auth.ts`, enforced in `src/middleware.ts`); there's no
+  per-user accounts yet, just one shared password gate.
 
 ## Hosting later (Supabase or any Postgres)
 
@@ -103,6 +106,8 @@ src/
     client.ts                embedded Postgres (PGlite) connection + init
     repo.ts                  typed data access
     seed-data.ts, seed.ts    seed + reset
+  middleware.ts              gates /admin/* behind the session cookie
+  lib/auth.ts                signed session token create/verify (admin login)
 data/                        local database files (gitignored, created on first run)
 ```
 

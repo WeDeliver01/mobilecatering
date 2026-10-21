@@ -3,6 +3,7 @@ import { getBookings, getDeliveries, getInvoices, getPayments } from "@/db/repo"
 import { ZAR } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { AdminLogoutButton } from "@/components/ui/AdminLogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function OperationsPage() {
   const booking = (id: string) => bookings.find((b) => b.id === id);
   return (
     <div className="max-w-7xl mx-auto w-full px-container-padding py-stack-lg space-y-stack-lg">
-      <header><p className="font-label-md text-primary uppercase tracking-widest text-xs">Super admin</p><h1 className="font-headline-lg text-headline-lg">Operations</h1><p className="text-on-surface-variant">Payments, invoices and delivery dispatch in one place.</p></header>
+      <header className="flex justify-between items-start"><div><p className="font-label-md text-primary uppercase tracking-widest text-xs">Super admin</p><h1 className="font-headline-lg text-headline-lg">Operations</h1><p className="text-on-surface-variant">Payments, invoices and delivery dispatch in one place.</p></div><AdminLogoutButton /></header>
       <Section title="Payments" empty="No payment requests yet.">
         {payments.map((p) => <tr key={p.id}><Td>{p.reference}</Td><Td>{booking(p.booking_id)?.customer ?? "—"}</Td><Td>{ZAR(p.amount)}</Td><Td><StatusPill status={p.status} /></Td></tr>)}
       </Section>

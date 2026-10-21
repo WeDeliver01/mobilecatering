@@ -43,10 +43,13 @@ Set at minimum:
 ```
 PGLITE_DIR=./data/pg
 PAYFAST_WEBHOOK_TOKEN=<a long random secret>
+ADMIN_PASSWORD=<a strong password for /admin>
+SESSION_SECRET=<a long random secret>
 ```
 
-Generate the token with `openssl rand -hex 32`. Put the same value into your PayFast
-notification adapter's `x-webhook-token` header config.
+Generate secrets with `openssl rand -hex 32`. Put the `PAYFAST_WEBHOOK_TOKEN` value into your
+PayFast notification adapter's `x-webhook-token` header config. Without `ADMIN_PASSWORD` and
+`SESSION_SECRET` set, `/admin` refuses to serve anything (fails closed).
 
 ## 4. Seed the database (first run only)
 
@@ -90,9 +93,9 @@ Open `https://catering.operandis.co.za` in a browser and confirm the booking pag
 
 ## Notes / things to decide before going live
 
-- **No auth on `/admin` yet** (per the README). Anyone who can reach the domain can open it.
-  At minimum put nginx `auth_basic` in front of the `/admin` location block until real auth
-  ships, or restrict it to your office/VPN IP with an `allow`/`deny` block.
+- **Admin auth**: `/admin` is gated by a single shared password (`ADMIN_PASSWORD`) and a signed
+  session cookie. Good enough for one or two trusted staff; if you need per-user accounts or
+  stronger auth later, see the README's "Hosting later" section.
 - **Backups**: `data/pg` is the entire database. Add it to whatever backup job already covers
   this VPS (e.g. a nightly tar + off-box copy).
 - **Logs**: `journalctl -u mossannah` is the only log sink right now — nothing ships to an
