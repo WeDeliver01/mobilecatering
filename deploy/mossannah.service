@@ -1,0 +1,30 @@
+# systemd unit for the MOSSANNAH app
+#
+# Install:
+#   sudo cp deploy/mossannah.service /etc/systemd/system/mossannah.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mossannah
+#
+# Logs:
+#   journalctl -u mossannah -f
+
+[Unit]
+Description=MOSSANNAH booking & operations app
+After=network.target
+
+[Service]
+Type=simple
+User=mossannah
+WorkingDirectory=/var/www/mossannah
+EnvironmentFile=/var/www/mossannah/.env
+Environment=NODE_ENV=production
+Environment=PORT=3001
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+# Keep the embedded Postgres (PGlite) data on disk and writable only by this service.
+ReadWritePaths=/var/www/mossannah/data
+
+[Install]
+WantedBy=multi-user.target
