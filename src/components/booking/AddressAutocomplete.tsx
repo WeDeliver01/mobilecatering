@@ -5,7 +5,7 @@ import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
 
 // Debounced well past normal typing speed, plus a session-local cache, so
 // retyping or backspacing to a prefix already looked up costs zero extra
-// requests — Geoapify's free tier is billed per call, not per booking.
+// requests. Geoapify's free tier is billed per call, not per booking.
 const DEBOUNCE_MS = 450;
 
 export function AddressAutocomplete({
@@ -56,7 +56,7 @@ export function AddressAutocomplete({
   }, []);
 
   const select = (s: AddressSuggestion) => {
-    skipNextRef.current = true; // the formatted text about to land in `value` is already known — don't re-query it
+    skipNextRef.current = true; // the formatted text about to land in `value` is already known, no need to re-query it
     onSelect(s);
     setOpen(false);
   };

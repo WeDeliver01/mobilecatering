@@ -1,5 +1,5 @@
 // Tiny in-memory TTL cache, server-side only. Good enough for a single Node
-// process (this app runs as one instance — see deploy/DEPLOY.md) and avoids
+// process (this app runs as one instance, see deploy/DEPLOY.md) and avoids
 // burning Geoapify's free-tier quota on repeat lookups: the same venue gets
 // quoted many times, and autocomplete re-queries the same prefixes as users
 // type and backspace.

@@ -1,7 +1,7 @@
 import { routeCache, roundCoord } from "./geoCache";
 
 // Fixed depot origin for delivery-distance pricing.
-// Approximate (suburb-level) coordinates for 1054 Block H, Soshanguve — good
+// Approximate (suburb-level) coordinates for 1054 Block H, Soshanguve, good
 // enough to ship with. Refine to the exact street pin once GEOAPIFY_API_KEY
 // is set: geocode the depot address once (e.g. via the autocomplete route
 // below, or https://apidocs.geoapify.com/playground/geocoding) and replace
@@ -12,7 +12,7 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
-// Straight-line distance in km. No API key needed — used for the live
+// Straight-line distance in km. No API key needed, used for the live
 // client-side estimate and as the server-side fallback when Geoapify isn't
 // configured or a lookup fails.
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -32,11 +32,11 @@ export interface RouteDistance {
 }
 
 // Real driving distance from the depot, via Geoapify Routing (server-side
-// only — needs GEOAPIFY_API_KEY). Falls back to a straight-line estimate,
+// only, needs GEOAPIFY_API_KEY). Falls back to a straight-line estimate,
 // padded ~30% to roughly approximate road distance, when no key is set or
 // the request fails, so pricing still works before Geoapify is configured.
 //
-// Cached by rounded coordinates (see src/lib/geoCache.ts) — repeat quotes
+// Cached by rounded coordinates (see src/lib/geoCache.ts): repeat quotes
 // for the same venue, or a saved quote later converted to a booking, reuse
 // one Geoapify Routing call instead of paying for it again.
 export async function depotDistanceTo(lat: number, lon: number): Promise<RouteDistance> {

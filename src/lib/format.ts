@@ -1,5 +1,5 @@
 // Manual thousands-grouping (not toLocaleString) so server and client render
-// byte-identical output — Intl's en-ZA grouping separator varies between
+// byte-identical output. Intl's en-ZA grouping separator varies between
 // Node's ICU build and the browser's, which caused SSR/CSR hydration mismatches.
 const groupThousands = (n: number): string =>
   Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");

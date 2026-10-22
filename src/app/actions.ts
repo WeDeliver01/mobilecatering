@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import {
   getAssets, getBookings, getAssetById, insertBooking, insertQuote,
   getQuoteByCode, markQuoteConverted, updateAsset, setBookingStatus, addAsset,
-  insertPayment, insertDelivery,
+  insertPayment, insertDelivery, getPricingSettings,
 } from "@/db/repo";
 import { windowAvailability } from "@/lib/availability";
-import { computePrice, deliveryFeeForDistance, DELIVERY_BASE_FEE } from "@/lib/pricing";
+import { computePrice, deliveryFeeForDistance, type PricingSettings } from "@/lib/pricing";
 import { depotDistanceTo, type RouteDistance } from "@/lib/geo";
 import { billedDays, iso, today, addDays } from "@/lib/dates";
 import { generateQuoteCode, uid } from "@/lib/quote";
@@ -27,14 +27,15 @@ export interface BookingInput {
 }
 
 async function resolveDelivery(
-  input: BookingInput
+  input: BookingInput,
+  settings: PricingSettings
 ): Promise<{ dist: RouteDistance | null; deliveryFee: number; zoneLabel: string }> {
   const hasCoords = input.addressLat != null && input.addressLon != null;
   const dist = hasCoords ? await depotDistanceTo(input.addressLat as number, input.addressLon as number) : null;
-  const deliveryFee = dist ? deliveryFeeForDistance(dist.distanceKm) : DELIVERY_BASE_FEE;
+  const deliveryFee = dist ? deliveryFeeForDistance(dist.distanceKm, settings) : settings.deliveryBaseFee;
   const zoneLabel = dist
     ? `${dist.distanceKm.toFixed(1)} km from depot${dist.source === "geoapify" ? "" : " (estimated)"}`
-    : "Address not geocoded — flat fee applied";
+    : "Address not geocoded, flat fee applied";
   return { dist, deliveryFee, zoneLabel };
 }
 
@@ -42,7 +43,8 @@ async function buildBooking(
   input: BookingInput,
   status: BookingStatus,
   deliveryFee: number,
-  zoneLabel: string
+  zoneLabel: string,
+  waiverFee: number
 ): Promise<Booking | { error: string }> {
   const [assets, bookings] = await Promise.all([getAssets(), getBookings()]);
   const days = billedDays(input.start, input.end);
@@ -54,7 +56,7 @@ async function buildBooking(
   const asset = await getAssetById(input.assetId);
   if (!asset || !asset.active) return { error: "That unit is not available." };
 
-  const price = computePrice({ asset, days, deliveryFee, waiver: input.waiver });
+  const price = computePrice({ asset, days, deliveryFee, waiver: input.waiver, waiverFee });
   return {
     id: uid(),
     asset_type: input.assetType,
@@ -73,10 +75,11 @@ async function buildBooking(
 }
 
 export async function createBookingAction(input: BookingInput) {
-  const { dist, deliveryFee, zoneLabel } = await resolveDelivery(input);
+  const settings = await getPricingSettings();
+  const { dist, deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
   // A pending payment still holds capacity, preventing a checkout race. The
   // PayFast webhook is the only path that promotes it to reserved.
-  const b = await buildBooking(input, "pending", deliveryFee, zoneLabel);
+  const b = await buildBooking(input, "pending", deliveryFee, zoneLabel, settings.waiverFee);
   if ("error" in b) return { ok: false as const, error: b.error };
   await insertBooking(b);
   const reference = `MZ-${b.id.slice(0, 8).toUpperCase()}`;
@@ -99,8 +102,9 @@ export async function createQuoteAction(input: BookingInput) {
   const asset = await getAssetById(input.assetId);
   if (!asset) return { ok: false as const, error: "Unknown unit." };
   const days = billedDays(input.start, input.end);
-  const { deliveryFee, zoneLabel } = await resolveDelivery(input);
-  const price = computePrice({ asset, days, deliveryFee, waiver: input.waiver });
+  const settings = await getPricingSettings();
+  const { deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
+  const price = computePrice({ asset, days, deliveryFee, waiver: input.waiver, waiverFee: settings.waiverFee });
 
   const snapshot: QuoteSnapshot = {
     asset_type: input.assetType,
@@ -153,7 +157,7 @@ export async function convertQuoteAction(code: string) {
 
 export async function updateAssetAction(
   id: string,
-  patch: { daily_rate?: number; quantity_available?: number; active?: boolean; name?: string }
+  patch: { daily_rate?: number; quantity_available?: number; active?: boolean; name?: string; image_url?: string | null }
 ) {
   await updateAsset(id, patch);
   revalidatePath("/admin");
@@ -178,6 +182,7 @@ export async function addAssetAction(type: AssetType) {
     quantity_available: 1,
     daily_rate: type === "fridge" ? 1250 : 950,
     active: true,
+    image_url: null,
   });
   revalidatePath("/admin");
   return { ok: true as const };

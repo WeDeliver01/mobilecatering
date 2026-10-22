@@ -5,12 +5,11 @@ import Link from "next/link";
 import type { Quote } from "@/lib/types";
 import { ZAR } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
-import { WAIVER_FEE } from "@/lib/pricing";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { convertQuoteAction } from "@/app/actions";
 
-export function QuoteView({ quote }: { quote: Quote }) {
+export function QuoteView({ quote, waiverFee }: { quote: Quote; waiverFee: number }) {
   const s = quote.snapshot_json;
   const [status, setStatus] = useState(quote.status);
   const [bookingRef, setBookingRef] = useState<string | null>(quote.converted_booking_id);
@@ -44,7 +43,7 @@ export function QuoteView({ quote }: { quote: Quote }) {
             {s.delivery_address && <Row k="Address" v={s.delivery_address} />}
             <Row k="Delivery distance" v={s.zone} />
             {s.site_contact && <Row k="Site contact" v={s.site_contact} />}
-            <Row k="Damage waiver" v={s.waiver ? `${ZAR(WAIVER_FEE)} (on)` : "Not added"} />
+            <Row k="Damage waiver" v={s.waiver ? `${ZAR(waiverFee)} (on)` : "Not added"} />
           </div>
 
           <div className="border-t border-outline-variant pt-4 flex justify-between items-center">

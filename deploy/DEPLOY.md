@@ -2,7 +2,7 @@
 
 This deploys the app as-is, keeping the embedded PGlite database (data lives as files on the
 VPS disk, at `/var/www/mossannah/data`). Because PGlite is an embedded single-file database,
-**run exactly one instance of the app** — no PM2 cluster mode, no multiple systemd instances.
+**run exactly one instance of the app** (no PM2 cluster mode, no multiple systemd instances).
 If you outgrow that later, see the README's "Hosting later" section for the Postgres swap.
 
 ## 0. Prerequisites on the VPS
@@ -67,7 +67,7 @@ sudo systemctl enable --now mossannah
 sudo systemctl status mossannah
 ```
 
-The app listens on `127.0.0.1:3001` (not exposed publicly — nginx is the only way in).
+The app listens on `127.0.0.1:3001` (not exposed publicly, nginx is the only way in).
 
 ## 6. Install the nginx site and get TLS
 
@@ -98,5 +98,5 @@ Open `https://catering.operandis.co.za` in a browser and confirm the booking pag
   stronger auth later, see the README's "Hosting later" section.
 - **Backups**: `data/pg` is the entire database. Add it to whatever backup job already covers
   this VPS (e.g. a nightly tar + off-box copy).
-- **Logs**: `journalctl -u mossannah` is the only log sink right now — nothing ships to an
+- **Logs**: `journalctl -u mossannah` is the only log sink right now, nothing ships to an
   external log service.

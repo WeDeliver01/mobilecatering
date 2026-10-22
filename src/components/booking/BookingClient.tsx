@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Asset, AssetType, AvailabilityResult, Booking } from "@/lib/types";
-import { WAIVER_FEE, DELIVERY_BASE_FEE, computePrice, deliveryFeeForDistance } from "@/lib/pricing";
+import type { PricingSettings } from "@/lib/pricing";
+import { computePrice, deliveryFeeForDistance } from "@/lib/pricing";
 import { DEPOT, haversineKm } from "@/lib/geo";
 import { billedDays, occupiedDays, prettyDate } from "@/lib/dates";
 import { ZAR } from "@/lib/format";
@@ -23,12 +24,13 @@ type Modal =
   | null;
 
 export function BookingClient({
-  assets, initialStart, initialEnd, minDate,
+  assets, initialStart, initialEnd, minDate, pricing,
 }: {
   assets: Asset[];
   initialStart: string;
   initialEnd: string;
   minDate: string;
+  pricing: PricingSettings;
 }) {
   const types = useMemo(
     () => Array.from(new Set(assets.map((a) => a.type))) as AssetType[],
@@ -76,13 +78,13 @@ export function BookingClient({
   }, [type, start, end]);
 
   const days = billedDays(start, end);
-  // Live estimate only (straight-line × 1.3, no API call) — the authoritative
+  // Live estimate only (straight-line x 1.3, no API call). The authoritative
   // fee is computed server-side from real driving distance on submit.
   const estimatedDistanceKm = addressCoords
     ? haversineKm(DEPOT.lat, DEPOT.lon, addressCoords.lat, addressCoords.lon) * 1.3
     : null;
-  const deliveryFee = estimatedDistanceKm != null ? deliveryFeeForDistance(estimatedDistanceKm) : DELIVERY_BASE_FEE;
-  const price = computePrice({ asset: { daily_rate: asset?.daily_rate ?? 0 }, days, deliveryFee, waiver });
+  const deliveryFee = estimatedDistanceKm != null ? deliveryFeeForDistance(estimatedDistanceKm, pricing) : pricing.deliveryBaseFee;
+  const price = computePrice({ asset: { daily_rate: asset?.daily_rate ?? 0 }, days, deliveryFee, waiver, waiverFee: pricing.waiverFee });
   const status = avail?.status ?? null;
 
   const payload = (): BookingInput => ({
@@ -126,7 +128,7 @@ export function BookingClient({
               Mobile fridges &amp; toilets, delivered anywhere in Gauteng.
             </h1>
             <p className="max-w-xl font-body-lg text-on-surface-variant">
-              Pick a unit, choose your dates, and we deliver, set up and collect — fixed pricing, no surprises on the day.
+              Pick a unit, choose your dates, and we deliver, set up and collect, fixed pricing, no surprises on the day.
             </p>
             <div className="flex flex-wrap gap-5 text-sm text-on-surface-variant font-medium">
               <Check label="Delivery & collection included" />
@@ -181,11 +183,16 @@ export function BookingClient({
                         on ? "active-tile" : "border-outline-variant hover:border-on-surface-variant"
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface">
-                          <Icon name={m.icon} className="text-xl" />
-                        </span>
-                      </div>
+                      {a.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.image_url} alt={a.name} className="w-full h-32 object-cover rounded-lg mb-3" />
+                      ) : (
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface">
+                            <Icon name={m.icon} className="text-xl" />
+                          </span>
+                        </div>
+                      )}
                       <h3 className="font-headline-md text-headline-md mb-1">{a.name}</h3>
                       <p className="text-on-surface-variant font-body-md text-sm mb-4">{a.description}</p>
                       <span className="font-headline-lg text-xl text-on-surface">
@@ -235,7 +242,7 @@ export function BookingClient({
                   />
                   <p className="text-xs text-on-surface-variant">
                     {addressCoords
-                      ? `Delivery fee is estimated from this pin — ${ZAR(deliveryFee)}.`
+                      ? `Delivery fee is estimated from this pin: ${ZAR(deliveryFee)}.`
                       : "Pick a suggestion to price delivery by distance, or type the full address manually."}
                   </p>
                 </Field>
@@ -256,7 +263,7 @@ export function BookingClient({
                 <div className="flex items-center justify-between pt-1">
                   <div>
                     <p className="font-label-md text-label-md">Damage waiver</p>
-                    <p className="text-xs text-on-surface-variant">Covers accidental damage on site. {ZAR(WAIVER_FEE)} flat.</p>
+                    <p className="text-xs text-on-surface-variant">Covers accidental damage on site. {ZAR(pricing.waiverFee)} flat.</p>
                   </div>
                   <button
                     type="button" onClick={() => setWaiver((w) => !w)}

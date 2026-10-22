@@ -1,15 +1,21 @@
 import type { Asset } from "./types";
 
-export const WAIVER_FEE = 120; // optional damage waiver, flat per booking
+export interface PricingSettings {
+  deliveryBaseFee: number;
+  deliveryRatePerKm: number;
+  waiverFee: number;
+}
 
-// Delivery is priced on real distance from the depot (see src/lib/geo.ts),
-// not a flat zone fee: a base fee covers depot-adjacent jobs, plus a flat
-// rate per km beyond that.
-export const DELIVERY_BASE_FEE = 150;
-export const DELIVERY_RATE_PER_KM = 8;
+// Used to seed the settings table and as a fallback if a setting is ever
+// missing. The admin Settings tab edits the live values in the database.
+export const DEFAULT_PRICING: PricingSettings = {
+  deliveryBaseFee: 150,
+  deliveryRatePerKm: 8,
+  waiverFee: 120,
+};
 
-export function deliveryFeeForDistance(distanceKm: number): number {
-  return Math.round(DELIVERY_BASE_FEE + Math.max(0, distanceKm) * DELIVERY_RATE_PER_KM);
+export function deliveryFeeForDistance(distanceKm: number, settings: PricingSettings): number {
+  return Math.round(settings.deliveryBaseFee + Math.max(0, distanceKm) * settings.deliveryRatePerKm);
 }
 
 export interface PriceBreakdown {
@@ -24,8 +30,9 @@ export function computePrice(opts: {
   days: number;
   deliveryFee: number;
   waiver: boolean;
+  waiverFee: number;
 }): PriceBreakdown {
   const base = opts.asset.daily_rate * opts.days;
-  const waiver = opts.waiver ? WAIVER_FEE : 0;
+  const waiver = opts.waiver ? opts.waiverFee : 0;
   return { base, delivery: opts.deliveryFee, waiver, total: base + opts.deliveryFee + waiver };
 }

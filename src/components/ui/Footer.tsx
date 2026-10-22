@@ -11,6 +11,7 @@ export function Footer() {
         </p>
         <div className="flex flex-wrap justify-center gap-6">
           <a href="tel:+27115550123" className="text-sm text-on-surface-variant hover:text-primary transition-all font-medium">+27 (0)11 555 0123</a>
+          <a href="/gallery#terms" className="text-sm text-on-surface-variant hover:text-primary transition-all font-medium">Terms &amp; policies</a>
           <a href="#top" className="text-sm text-on-surface-variant hover:text-primary transition-all font-medium">Back to top</a>
         </div>
       </div>

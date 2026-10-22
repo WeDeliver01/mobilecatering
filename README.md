@@ -65,7 +65,7 @@ npm run start
   This rule lives in `src/lib/dates.ts` (`billedDays` and `occupiedDays`).
 - Delivery zones and fees, and the damage waiver amount, are in `src/lib/pricing.ts`.
 - `/admin` is behind a password login (`/admin/login`). Set `ADMIN_PASSWORD` and `SESSION_SECRET`
-  in `.env` (see `.env.example`) — without both, `/admin` refuses to serve anything. The session
+  in `.env` (see `.env.example`), without both, `/admin` refuses to serve anything. The session
   is a signed, expiring cookie (`src/lib/auth.ts`, enforced in `src/middleware.ts`); there's no
   per-user accounts yet, just one shared password gate.
 

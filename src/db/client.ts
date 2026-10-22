@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import { sql } from "drizzle-orm";
 import * as schema from "./schema";
-import { runSeed } from "./seed-data";
+import { runSeed, seedSettings, seedSiteContent } from "./seed-data";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -32,8 +32,10 @@ export async function initSchema(): Promise<void> {
     description TEXT NOT NULL DEFAULT '',
     quantity_available INTEGER NOT NULL DEFAULT 1,
     daily_rate INTEGER NOT NULL DEFAULT 0,
-    active BOOLEAN NOT NULL DEFAULT TRUE
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    image_url TEXT
   )`);
+  await db.execute(sql`ALTER TABLE assets ADD COLUMN IF NOT EXISTS image_url TEXT`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS bookings (
     id TEXT PRIMARY KEY,
     asset_type TEXT NOT NULL,
@@ -74,6 +76,17 @@ export async function initSchema(): Promise<void> {
     delivery_fee INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'scheduled'
   )`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments (booking_id)`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY, value TEXT NOT NULL
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS site_content (
+    slug TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS gallery_images (
+    id TEXT PRIMARY KEY, url TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
 }
 
 export async function ensureSeed(): Promise<void> {
@@ -84,11 +97,35 @@ export async function ensureSeed(): Promise<void> {
   if (count === 0) await runSeed(db);
 }
 
+// Separate from ensureSeed so an existing deployment (assets already seeded)
+// still picks up the new settings/content defaults after an update.
+export async function ensureDefaults(): Promise<void> {
+  const settingsCount = (await db.execute(sql`SELECT COUNT(*)::int AS c FROM settings`)) as unknown as {
+    rows: { c: number }[];
+  };
+  if (Number(settingsCount.rows?.[0]?.c ?? 0) === 0) {
+    for (const row of seedSettings()) {
+      await db.execute(sql`INSERT INTO settings (key, value) VALUES (${row.key}, ${row.value})
+        ON CONFLICT (key) DO NOTHING`);
+    }
+  }
+  const contentCount = (await db.execute(sql`SELECT COUNT(*)::int AS c FROM site_content`)) as unknown as {
+    rows: { c: number }[];
+  };
+  if (Number(contentCount.rows?.[0]?.c ?? 0) === 0) {
+    for (const row of seedSiteContent()) {
+      await db.execute(sql`INSERT INTO site_content (slug, title, body, updated_at)
+        VALUES (${row.slug}, ${row.title}, ${row.body}, ${row.updated_at}) ON CONFLICT (slug) DO NOTHING`);
+    }
+  }
+}
+
 export async function ready(): Promise<void> {
   if (!g.__mz_init) {
     g.__mz_init = (async () => {
       await initSchema();
       await ensureSeed();
+      await ensureDefaults();
     })();
   }
   return g.__mz_init;

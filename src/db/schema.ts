@@ -10,6 +10,7 @@ export const assets = pgTable("assets", {
   quantity_available: integer("quantity_available").notNull().default(1),
   daily_rate: integer("daily_rate").notNull().default(0),
   active: boolean("active").notNull().default(true),
+  image_url: text("image_url"),
 });
 
 export const bookings = pgTable("bookings", {
@@ -66,4 +67,26 @@ export const deliveries = pgTable("deliveries", {
   duration_minutes: integer("duration_minutes"),
   delivery_fee: integer("delivery_fee").notNull(),
   status: text("status").notNull().default("scheduled"),
+});
+
+// Generic key-value store for admin-editable site settings (delivery
+// pricing today; room to grow without a schema change).
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+// Editable long-form content blocks (About, Terms & Policies).
+export const siteContent = pgTable("site_content", {
+  slug: text("slug").primaryKey(),
+  title: text("title").notNull().default(""),
+  body: text("body").notNull().default(""),
+  updated_at: text("updated_at").notNull(),
+});
+
+export const galleryImages = pgTable("gallery_images", {
+  id: text("id").primaryKey(),
+  url: text("url").notNull(),
+  caption: text("caption").notNull().default(""),
+  sort_order: integer("sort_order").notNull().default(0),
 });

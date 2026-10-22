@@ -13,6 +13,7 @@ export interface Asset {
   quantity_available: number;
   daily_rate: number; // whole Rand
   active: boolean;
+  image_url: string | null;
 }
 
 export interface Booking {
@@ -86,6 +87,20 @@ export interface Delivery {
   duration_minutes: number | null;
   delivery_fee: number;
   status: DeliveryStatus;
+}
+
+export interface SiteContent {
+  slug: string;
+  title: string;
+  body: string;
+  updated_at: string;
+}
+
+export interface GalleryImage {
+  id: string;
+  url: string;
+  caption: string;
+  sort_order: number;
 }
 
 export type AvailabilityVerdict = "available" | "limited" | "unavailable";
