@@ -4,7 +4,7 @@
 
 :root { color-scheme: light; }
 
-body { background-color: #f8f9ff; color: #0b1c30; font-family: Inter, system-ui, sans-serif; }
+body { background-color: #ffffff; color: #15171a; font-family: Inter, system-ui, sans-serif; }
 
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
@@ -23,17 +23,9 @@ body { background-color: #f8f9ff; color: #0b1c30; font-family: Inter, system-ui,
 }
 .icon-fill { font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24; }
 
-.four-block-bar { height: 3px; width: 100%; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; }
-.four-block-bar > i { display: block; }
-.bb-tangerine { background-color: #0f172a; }
-.bb-marigold { background-color: #0051d5; }
-.bb-green { background-color: #059669; }
-.bb-teal { background-color: #dce9ff; }
-
-.custom-shadow { box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px -1px rgba(15,23,42,.02); }
-.active-tile { border-color: #0051d5 !important; background-color: #eff4ff; }
-.active-tab { color: #0051d5; border-bottom: 2px solid #0051d5; font-weight: 600; }
+.custom-shadow { box-shadow: 0 1px 2px rgba(21,23,26,0.04), 0 12px 32px rgba(21,23,26,0.06); }
+.active-tile { border-color: #15171a !important; background-color: #f7f7f8; }
+.active-tab { color: #15171a; border-bottom: 2px solid #15171a; font-weight: 700; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-.industrial-grid { background-image: radial-gradient(#bec6e0 1px, transparent 1px); background-size: 24px 24px; }
 .tabular-nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }

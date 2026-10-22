@@ -6,7 +6,6 @@ import type { Quote } from "@/lib/types";
 import { ZAR } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
 import { zoneById, WAIVER_FEE } from "@/lib/pricing";
-import { BrandBar } from "@/components/ui/BrandBar";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { convertQuoteAction } from "@/app/actions";
@@ -30,8 +29,7 @@ export function QuoteView({ quote }: { quote: Quote }) {
 
   return (
     <div className="max-w-xl mx-auto px-container-padding py-stack-lg space-y-6">
-      <div className="bg-surface-container-lowest rounded-xl custom-shadow overflow-hidden">
-        <BrandBar />
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
         <div className="p-6 space-y-6">
           <div className="flex justify-between items-start">
             <div>
@@ -53,7 +51,7 @@ export function QuoteView({ quote }: { quote: Quote }) {
 
           <div className="border-t border-outline-variant pt-4 flex justify-between items-center">
             <span className="font-headline-md text-headline-md">Total</span>
-            <span className="font-display-lg text-3xl text-primary">{ZAR(s.price_total)}</span>
+            <span className="font-display-lg text-2xl text-on-surface">{ZAR(s.price_total)}</span>
           </div>
 
           {error && (
@@ -65,27 +63,27 @@ export function QuoteView({ quote }: { quote: Quote }) {
           {status === "active" && (
             <button
               onClick={convert} disabled={busy}
-              className="w-full bg-tangerine text-on-background py-4 rounded-lg font-bold text-lg hover:opacity-90 transition-all active:scale-95 disabled:opacity-40"
+              className="w-full bg-primary text-on-primary py-4 rounded-lg font-bold text-lg hover:opacity-90 transition-all active:scale-[0.99] disabled:opacity-40"
             >
               {busy ? "Working..." : "Convert to booking"}
             </button>
           )}
 
           {status === "converted" && (
-            <div className="bg-tertiary/10 text-tertiary rounded-lg px-4 py-3 flex items-center gap-2 font-label-md">
+            <div className="bg-tertiary-container text-tertiary rounded-lg px-4 py-3 flex items-center gap-2 font-label-md">
               <Icon name="check_circle" fill /> Converted to booking{bookingRef ? ` #${bookingRef.slice(0, 8).toUpperCase()}` : ""}.
             </div>
           )}
 
           {status === "expired" && (
-            <div className="bg-surface-variant text-on-surface-variant rounded-lg px-4 py-3 text-sm">
+            <div className="bg-surface-container-low text-on-surface-variant rounded-lg px-4 py-3 text-sm">
               This quote has expired. Prices and availability may have changed, so please start a new booking.
             </div>
           )}
         </div>
       </div>
 
-      <Link href="/" className="inline-flex items-center gap-2 text-primary font-label-md hover:underline">
+      <Link href="/" className="inline-flex items-center gap-2 text-on-surface font-label-md hover:underline">
         <Icon name="arrow_back" className="text-[18px]" /> Back to booking
       </Link>
     </div>

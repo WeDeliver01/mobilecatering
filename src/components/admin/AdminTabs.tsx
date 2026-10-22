@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { Asset, AssetType, Booking, BookingStatus, Quote } from "@/lib/types";
 import { ZAR, ZARk } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
-import { BrandBar } from "@/components/ui/BrandBar";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { setBookingStatusAction, updateAssetAction, addAssetAction } from "@/app/actions";
@@ -29,14 +28,14 @@ export function AdminTabs({
   ];
 
   return (
-    <div className="max-w-7xl mx-auto w-full px-container-padding py-stack-lg">
-      <div className="flex border-b border-outline-variant mb-stack-lg overflow-x-auto no-scrollbar">
+    <div className="space-y-stack-lg">
+      <div className="flex gap-7 border-b border-outline-variant overflow-x-auto no-scrollbar">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-gutter py-stack-sm font-label-md text-label-md whitespace-nowrap ${
-              tab === t.id ? "active-tab" : "text-on-surface-variant hover:text-primary"
+            className={`pb-3 font-label-md text-label-md whitespace-nowrap border-b-2 -mb-px ${
+              tab === t.id ? "border-primary text-on-surface font-bold" : "border-transparent text-on-surface-variant hover:text-on-surface"
             }`}
           >
             {t.label}
@@ -70,36 +69,35 @@ function Overview({
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter mb-stack-lg">
-        <Stat label="Confirmed Bookings" value={String(confirmed.length)} accent="border-primary" foot={`${bookings.length} total`} />
-        <Stat label="Revenue Held" value={ZARk(revenueHeld)} accent="border-secondary-container" foot="Confirmed value" />
-        <Stat label="Upcoming Deliveries" value={String(upcoming.length)} accent="border-tertiary-container" foot="From today" />
-        <Stat label="Quote Conversion" value={convRate === null ? "-" : `${convRate}%`} accent="border-[#4e8051]" foot={quotes.length ? `${quotes.length} quotes` : "No quotes yet"} />
+        <Stat label="Confirmed Bookings" value={String(confirmed.length)} foot={`${bookings.length} total`} />
+        <Stat label="Revenue Held" value={ZARk(revenueHeld)} foot="Confirmed value" />
+        <Stat label="Upcoming Deliveries" value={String(upcoming.length)} foot="From today" />
+        <Stat label="Quote Conversion" value={convRate === null ? "-" : `${convRate}%`} foot={quotes.length ? `${quotes.length} quotes` : "No quotes yet"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
         {/* Next deliveries */}
-        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl custom-shadow overflow-hidden">
-          <BrandBar />
+        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
           <div className="p-stack-md border-b border-outline-variant flex justify-between items-center">
             <h2 className="font-headline-md text-headline-md">Next Deliveries</h2>
             <span className="text-on-surface-variant font-label-md text-label-md">{nextDeliveries.length} scheduled</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-surface-container-low">
+              <thead>
                 <tr>
                   <Th>Unit & Ref</Th><Th>Customer</Th><Th>Delivery</Th><Th className="text-right">Status</Th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-outline-variant/60">
                 {nextDeliveries.length === 0 && (
                   <tr><td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant font-body-md">No upcoming deliveries.</td></tr>
                 )}
                 {nextDeliveries.map((b) => (
-                  <tr key={b.id} className="hover:bg-surface-container/50 transition-colors">
+                  <tr key={b.id}>
                     <td className="px-6 py-4">
                       <div className="font-label-md text-on-surface flex items-center gap-2">
-                        <Icon name={TYPE_ICON[b.asset_type]} className="text-[18px] text-primary" />{assetName(b)}
+                        <Icon name={TYPE_ICON[b.asset_type]} className="text-[18px] text-on-surface-variant" />{assetName(b)}
                       </div>
                       <div className="font-code-sm text-on-surface-variant text-xs">#{b.id.slice(0, 8).toUpperCase()}</div>
                     </td>
@@ -114,7 +112,7 @@ function Overview({
         </div>
 
         {/* Utilisation */}
-        <div className="bg-surface-container-lowest rounded-xl custom-shadow p-stack-md flex flex-col gap-gutter">
+        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md flex flex-col gap-gutter">
           <h2 className="font-headline-md text-headline-md">Fleet Utilisation</h2>
           <div className="space-y-stack-md">
             {(["fridge", "toilet"] as AssetType[]).map((t) => {
@@ -190,14 +188,14 @@ function Bookings({ assets, bookings }: { assets: Asset[]; bookings: Booking[] }
   const filters: ("all" | BookingStatus)[] = ["all", "pending", "confirmed", "cancelled"];
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl custom-shadow overflow-hidden">
+    <div className="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
       <div className="p-stack-md border-b border-outline-variant flex flex-col md:flex-row justify-between items-center gap-stack-md">
         <h2 className="font-headline-md text-headline-md">Booking Register</h2>
         <div className="flex flex-col sm:flex-row gap-stack-sm w-full md:w-auto">
           <div className="relative flex-grow">
             <input
               value={q} onChange={(e) => setQ(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-outline-variant/40 bg-surface focus:ring-primary focus:border-primary font-body-md"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border border-outline bg-surface focus:ring-1 focus:ring-primary focus:border-primary font-body-md"
               placeholder="Search customer or ref..." type="text"
             />
             <Icon name="search" className="absolute left-3 top-2.5 text-on-surface-variant" />
@@ -207,7 +205,7 @@ function Bookings({ assets, bookings }: { assets: Asset[]; bookings: Booking[] }
               <button
                 key={f} onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-md font-label-md text-label-md capitalize transition-colors ${
-                  filter === f ? "bg-primary text-white" : "text-on-surface-variant hover:text-primary"
+                  filter === f ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"
                 }`}
               >
                 {f}
@@ -218,10 +216,10 @@ function Bookings({ assets, bookings }: { assets: Asset[]; bookings: Booking[] }
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="bg-surface-container-low">
+          <thead>
             <tr><Th>Delivery</Th><Th>Customer</Th><Th>Unit</Th><Th>Days</Th><Th>Total</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
           </thead>
-          <tbody className="divide-y divide-outline-variant/30">
+          <tbody className="divide-y divide-outline-variant/60">
             {rows.length === 0 && (
               <tr><td colSpan={7} className="px-6 py-10 text-center text-on-surface-variant font-body-md">No bookings match.</td></tr>
             )}
@@ -362,10 +360,10 @@ function AssetCard({
 }
 
 /* ---------------- small bits ---------------- */
-function Stat({ label, value, accent, foot }: { label: string; value: string; accent: string; foot: string }) {
+function Stat({ label, value, foot }: { label: string; value: string; foot: string }) {
   return (
-    <div className={`bg-surface-container-lowest p-stack-md rounded-xl custom-shadow border-t-4 ${accent}`}>
-      <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">{label}</p>
+    <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant flex flex-col gap-2">
+      <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{label}</p>
       <div className="flex items-end justify-between">
         <span className="font-headline-lg text-headline-lg text-on-surface">{value}</span>
         <span className="text-on-surface-variant font-label-md text-label-md">{foot}</span>
@@ -375,5 +373,9 @@ function Stat({ label, value, accent, foot }: { label: string; value: string; ac
 }
 
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-6 py-4 font-label-md text-label-md uppercase tracking-wider ${className}`}>{children}</th>;
+  return (
+    <th className={`px-6 py-3 font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider border-b border-outline-variant ${className}`}>
+      {children}
+    </th>
+  );
 }

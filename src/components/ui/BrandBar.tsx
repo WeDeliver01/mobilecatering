@@ -1,11 +1,5 @@
-// The signature four-block colour bar (tangerine, marigold, green, teal).
+// Retired with the minimal redesign (Oct 2026) — kept as a no-op so existing
+// call sites don't need to change.
 export function BrandBar() {
-  return (
-    <div className="four-block-bar">
-      <i className="bb-tangerine" />
-      <i className="bb-marigold" />
-      <i className="bb-green" />
-      <i className="bb-teal" />
-    </div>
-  );
+  return null;
 }
