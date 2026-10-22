@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "Fleet" },
   { href: "/#quote-calculator", label: "How it works" },
-  { href: "/gallery", label: "Gallery" },
-  { href: "/admin", label: "Operations" },
+  { href: "/gallery", label: "About" },
 ];
 
 export function TopNav() {
