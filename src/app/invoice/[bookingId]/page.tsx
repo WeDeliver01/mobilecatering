@@ -15,9 +15,10 @@ export default async function InvoicePage({ params }: { params: { bookingId: str
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2.5 font-headline-md text-lg text-on-surface font-extrabold">
               <span className="w-[30px] h-[30px] rounded-lg bg-primary text-on-primary grid place-items-center text-sm font-extrabold">M</span>
-              MOSSANNAH
+              MOBILE CATERING
             </div>
             <p className="text-sm text-on-surface-variant">Mobile fridge &amp; toilet hire</p>
+            <p className="text-xs text-on-surface-variant">MOSSANNAH, trading as Mobile Catering</p>
           </div>
           <div className="text-right flex flex-col gap-1">
             <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Tax invoice</p>

@@ -18,7 +18,7 @@ export function TopNav() {
       <nav className="flex justify-between items-center w-full px-container-padding h-16 max-w-7xl mx-auto gap-6 flex-wrap">
         <Link href="/" className="flex items-center gap-2.5 font-headline-md text-lg text-on-surface font-extrabold tracking-tight">
           <span className="w-8 h-8 rounded-lg bg-primary text-on-primary grid place-items-center text-sm font-extrabold">M</span>
-          MOSSANNAH
+          MOBILE CATERING
         </Link>
         <div className="hidden md:flex gap-8 items-center">
           {links.map((l) => (

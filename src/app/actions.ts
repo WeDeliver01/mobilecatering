@@ -86,7 +86,7 @@ export async function createBookingAction(input: BookingInput) {
   await Promise.all([
     insertPayment({ id: uid(), booking_id: b.id, amount: b.price_total, gateway: "payfast", reference, status: "pending", paid_at: null, created_at: new Date().toISOString() }),
     insertDelivery({
-      id: uid(), booking_id: b.id, origin_address: "MOSSANNAH Depot, 1054 Block H, Soshanguve",
+      id: uid(), booking_id: b.id, origin_address: "Mobile Catering Depot, 1054 Block H, Soshanguve",
       destination_address: b.delivery_address,
       distance_km: dist ? Math.round(dist.distanceKm) : null,
       duration_minutes: dist ? dist.durationMinutes : null,

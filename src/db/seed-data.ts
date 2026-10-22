@@ -92,10 +92,10 @@ export function seedSiteContent(): { slug: string; title: string; body: string; 
   return [
     {
       slug: "about",
-      title: "About MOSSANNAH",
+      title: "About Mobile Catering",
       body:
-        "MOSSANNAH hires out mobile fridge trailers and portable toilet trailers for events across Gauteng. " +
-        "We deliver, set up and collect, so you can focus on the event, not the logistics.\n\n" +
+        "Mobile Catering (MOSSANNAH) hires out mobile fridge trailers and portable toilet trailers for events " +
+        "across Gauteng. We deliver, set up and collect, so you can focus on the event, not the logistics.\n\n" +
         "Edit this text any time from Admin > Settings > Content.",
       updated_at: now,
     },

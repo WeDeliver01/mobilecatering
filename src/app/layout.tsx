@@ -4,7 +4,7 @@ import { TopNav } from "@/components/ui/TopNav";
 import { Footer } from "@/components/ui/Footer";
 
 export const metadata: Metadata = {
-  title: "MOSSANNAH | Event Logistics Booking",
+  title: "Mobile Catering | Event Logistics Booking",
   description: "Mobile fridge and toilet hire across Gauteng.",
 };
 
