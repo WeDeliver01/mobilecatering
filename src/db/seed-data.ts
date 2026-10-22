@@ -44,7 +44,8 @@ function seedBookings() {
     customer: string,
     address: string,
     distanceKm: number,
-    status: string
+    status: string,
+    eventType: string
   ) => {
     const start = iso(addDays(t, offStart));
     const end = iso(addDays(t, offEnd));
@@ -55,27 +56,35 @@ function seedBookings() {
     });
     return {
       id,
+      order_id: id, // each seeded booking is its own single-item order
       asset_type: type,
       asset_id: type === "fridge" ? "asset-fridge" : "asset-toilet",
       customer,
       start_date: start,
       end_date: end,
+      delivery_time: "09:00",
+      collection_time: "17:00",
       days,
       status,
       price_total: price.total,
       delivery_address: address,
+      billing_address: "",
       zone: `${distanceKm.toFixed(1)} km from depot (estimated)`,
       site_contact: "",
+      event_type: eventType,
+      customer_phone: "",
+      customer_whatsapp: false,
+      customer_email: "",
       created_at: new Date().toISOString(),
     };
   };
 
   return [
-    mk("bk-1", "fridge", 5, 7, "Hazel Food Market", "Hazel Food Market, Menlyn, Pretoria", 28, "confirmed"),
-    mk("bk-2", "fridge", 12, 14, "Naledi & Tebogo Wedding", "Irene Country Lodge, Centurion", 42, "pending"),
-    mk("bk-3", "toilet", 1, 2, "Soshanguve Saturday Market", "Block H Community Grounds, Soshanguve", 1.5, "confirmed"),
-    mk("bk-4", "toilet", 3, 6, "Mokoena Family Event", "1487 Extension 4, Soshanguve", 3, "confirmed"),
-    mk("bk-5", "toilet", 9, 11, "Brightline Corporate Day", "Kyalami Corner, Midrand", 35, "pending"),
+    mk("bk-1", "fridge", 5, 7, "Hazel Food Market", "Hazel Food Market, Menlyn, Pretoria", 28, "confirmed", "Festival or market"),
+    mk("bk-2", "fridge", 12, 14, "Naledi & Tebogo Wedding", "Irene Country Lodge, Centurion", 42, "pending", "Wedding"),
+    mk("bk-3", "toilet", 1, 2, "Soshanguve Saturday Market", "Block H Community Grounds, Soshanguve", 1.5, "confirmed", "Festival or market"),
+    mk("bk-4", "toilet", 3, 6, "Mokoena Family Event", "1487 Extension 4, Soshanguve", 3, "confirmed", "Birthday party"),
+    mk("bk-5", "toilet", 9, 11, "Brightline Corporate Day", "Kyalami Corner, Midrand", 35, "pending", "Corporate event"),
   ];
 }
 

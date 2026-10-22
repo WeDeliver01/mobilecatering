@@ -9,7 +9,7 @@ import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { convertQuoteAction } from "@/app/actions";
 
-export function QuoteView({ quote, waiverFee }: { quote: Quote; waiverFee: number }) {
+export function QuoteView({ quote }: { quote: Quote }) {
   const s = quote.snapshot_json;
   const [status, setStatus] = useState(quote.status);
   const [bookingRef, setBookingRef] = useState<string | null>(quote.converted_booking_id);
@@ -20,7 +20,7 @@ export function QuoteView({ quote, waiverFee }: { quote: Quote; waiverFee: numbe
     setBusy(true); setError(null);
     const res = await convertQuoteAction(quote.quote_code);
     setBusy(false);
-    if (res.ok) { setStatus("converted"); setBookingRef(res.booking.id); }
+    if (res.ok) { setStatus("converted"); setBookingRef(res.bookings[0].id); }
     else setError(res.error);
   };
 
@@ -37,13 +37,22 @@ export function QuoteView({ quote, waiverFee }: { quote: Quote; waiverFee: numbe
           </div>
 
           <div className="space-y-3">
-            <Row k="Unit" v={s.asset_name} />
+            {s.items.map((item, i) => (
+              <Row key={i} k={i === 0 ? "Units" : ""} v={item.asset_name} />
+            ))}
             <Row k="Dates" v={`${prettyDate(s.start_date)} - ${prettyDate(s.end_date)} (${s.days} day${s.days > 1 ? "s" : ""})`} />
+            {(s.delivery_time || s.collection_time) && (
+              <Row k="Times" v={`${s.delivery_time || "TBC"} delivery, ${s.collection_time || "TBC"} collection`} />
+            )}
+            {s.event_type && <Row k="Event type" v={s.event_type} />}
             <Row k="Customer" v={s.customer} />
+            {s.customer_phone && <Row k="Contact number" v={`${s.customer_phone}${s.customer_whatsapp ? " (WhatsApp)" : ""}`} />}
+            {s.customer_email && <Row k="Email" v={s.customer_email} />}
             {s.delivery_address && <Row k="Address" v={s.delivery_address} />}
+            {s.billing_address && <Row k="Billing address" v={s.billing_address} />}
             <Row k="Delivery distance" v={s.zone} />
             {s.site_contact && <Row k="Site contact" v={s.site_contact} />}
-            <Row k="Damage waiver" v={s.waiver ? `${ZAR(waiverFee)} (on)` : "Not added"} />
+            <Row k="Damage waiver" v={s.waiver ? `${ZAR(s.waiver_fee)} (on)` : "Not added"} />
           </div>
 
           <div className="border-t border-outline-variant pt-4 flex justify-between items-center">

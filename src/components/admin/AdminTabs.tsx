@@ -2,13 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Asset, AssetType, Booking, BookingStatus, Quote, SiteContent, GalleryImage } from "@/lib/types";
+import type { Asset, AssetType, Booking, BookingStatus, Quote, SiteContent, GalleryImage, Payment } from "@/lib/types";
 import type { PricingSettings } from "@/lib/pricing";
+import { groupOrders, type Order } from "@/lib/order";
 import { ZAR, ZARk } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { setBookingStatusAction, updateAssetAction, addAssetAction } from "@/app/actions";
+import { setOrderStatusAction, updateAssetAction, addAssetAction } from "@/app/actions";
 import {
   updatePricingSettingsAction, updateSiteContentAction,
   uploadAssetImageAction, addGalleryImageAction, deleteGalleryImageAction,
@@ -18,16 +19,18 @@ type Tab = "overview" | "bookings" | "assets" | "settings";
 const TYPE_ICON: Record<AssetType, string> = { fridge: "ac_unit", toilet: "wc" };
 
 export function AdminTabs({
-  assets, bookings, quotes, todayIso, pricing, siteContent, galleryImages,
+  assets, bookings, payments, quotes, todayIso, pricing, siteContent, galleryImages,
 }: {
   assets: Asset[];
   bookings: Booking[];
+  payments: Payment[];
   quotes: Quote[];
   todayIso: string;
   pricing: PricingSettings;
   siteContent: SiteContent[];
   galleryImages: GalleryImage[];
 }) {
+  const orders = useMemo(() => groupOrders(bookings, payments), [bookings, payments]);
   const [tab, setTab] = useState<Tab>("overview");
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
@@ -52,8 +55,8 @@ export function AdminTabs({
         ))}
       </div>
 
-      {tab === "overview" && <Overview assets={assets} bookings={bookings} quotes={quotes} todayIso={todayIso} />}
-      {tab === "bookings" && <Bookings assets={assets} bookings={bookings} />}
+      {tab === "overview" && <Overview assets={assets} orders={orders} quotes={quotes} todayIso={todayIso} />}
+      {tab === "bookings" && <Bookings assets={assets} orders={orders} />}
       {tab === "assets" && <Assets assets={assets} />}
       {tab === "settings" && <Settings pricing={pricing} siteContent={siteContent} galleryImages={galleryImages} />}
     </div>
@@ -62,24 +65,24 @@ export function AdminTabs({
 
 /* ---------------- Overview ---------------- */
 function Overview({
-  assets, bookings, quotes, todayIso,
+  assets, orders, quotes, todayIso,
 }: {
-  assets: Asset[]; bookings: Booking[]; quotes: Quote[]; todayIso: string;
+  assets: Asset[]; orders: Order[]; quotes: Quote[]; todayIso: string;
 }) {
-  const confirmed = bookings.filter((b) => b.status === "confirmed");
-  const revenueHeld = confirmed.reduce((s, b) => s + b.price_total, 0);
-  const upcoming = bookings.filter((b) => b.status !== "cancelled" && b.end_date >= todayIso);
+  const confirmed = orders.filter((o) => o.status === "confirmed");
+  const revenueHeld = confirmed.reduce((s, o) => s + o.total, 0);
+  const upcoming = orders.filter((o) => o.status !== "cancelled" && o.end_date >= todayIso);
   const nextDeliveries = [...upcoming].sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 6);
   const convRate = quotes.length
     ? Math.round((quotes.filter((q) => q.status === "converted").length / quotes.length) * 100)
     : null;
 
-  const assetName = (b: Booking) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet");
+  const unitsLabel = (o: Order) => o.bookings.map((b) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet")).join(", ");
 
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter mb-stack-lg">
-        <Stat label="Confirmed Bookings" value={String(confirmed.length)} foot={`${bookings.length} total`} />
+        <Stat label="Confirmed Bookings" value={String(confirmed.length)} foot={`${orders.length} total`} />
         <Stat label="Revenue Held" value={ZARk(revenueHeld)} foot="Confirmed value" />
         <Stat label="Upcoming Deliveries" value={String(upcoming.length)} foot="From today" />
         <Stat label="Quote Conversion" value={convRate === null ? "-" : `${convRate}%`} foot={quotes.length ? `${quotes.length} quotes` : "No quotes yet"} />
@@ -96,24 +99,24 @@ function Overview({
             <table className="w-full text-left">
               <thead>
                 <tr>
-                  <Th>Unit & Ref</Th><Th>Customer</Th><Th>Delivery</Th><Th className="text-right">Status</Th>
+                  <Th>Units & Ref</Th><Th>Customer</Th><Th>Delivery</Th><Th className="text-right">Status</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/60">
                 {nextDeliveries.length === 0 && (
                   <tr><td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant font-body-md">No upcoming deliveries.</td></tr>
                 )}
-                {nextDeliveries.map((b) => (
-                  <tr key={b.id}>
+                {nextDeliveries.map((o) => (
+                  <tr key={o.orderId}>
                     <td className="px-6 py-4">
                       <div className="font-label-md text-on-surface flex items-center gap-2">
-                        <Icon name={TYPE_ICON[b.asset_type]} className="text-[18px] text-on-surface-variant" />{assetName(b)}
+                        <Icon name={TYPE_ICON[o.bookings[0].asset_type]} className="text-[18px] text-on-surface-variant" />{unitsLabel(o)}
                       </div>
-                      <div className="font-code-sm text-on-surface-variant text-xs">#{b.id.slice(0, 8).toUpperCase()}</div>
+                      <div className="font-code-sm text-on-surface-variant text-xs">#{o.orderId.slice(0, 8).toUpperCase()}</div>
                     </td>
-                    <td className="px-6 py-4 font-body-md">{b.customer}</td>
-                    <td className="px-6 py-4 font-body-md">{prettyDate(b.start_date)}</td>
-                    <td className="px-6 py-4 text-right"><StatusPill status={b.status} /></td>
+                    <td className="px-6 py-4 font-body-md">{o.customer}</td>
+                    <td className="px-6 py-4 font-body-md">{prettyDate(o.start_date)}</td>
+                    <td className="px-6 py-4 text-right"><StatusPill status={o.status} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -127,8 +130,8 @@ function Overview({
           <div className="space-y-stack-md">
             {(["fridge", "toilet"] as AssetType[]).map((t) => {
               const cap = assets.filter((a) => a.type === t && a.active).reduce((s, a) => s + a.quantity_available, 0);
-              const onHire = bookings.filter(
-                (b) => b.asset_type === t && b.status === "confirmed" && b.start_date <= todayIso && b.end_date >= todayIso
+              const onHire = orders.filter(
+                (o) => o.status === "confirmed" && o.start_date <= todayIso && o.end_date >= todayIso && o.bookings.some((b) => b.asset_type === t)
               ).length;
               const pct = cap ? Math.min(100, Math.round((onHire / cap) * 100)) : 0;
               const avail = Math.max(0, cap - onHire);
@@ -149,7 +152,7 @@ function Overview({
             })}
           </div>
           <div className="mt-auto pt-stack-lg">
-            <PendingAlert bookings={bookings} todayIso={todayIso} />
+            <PendingAlert orders={orders} todayIso={todayIso} />
           </div>
         </div>
       </div>
@@ -157,8 +160,8 @@ function Overview({
   );
 }
 
-function PendingAlert({ bookings, todayIso }: { bookings: Booking[]; todayIso: string }) {
-  const pending = bookings.filter((b) => b.status === "pending" && b.end_date >= todayIso).length;
+function PendingAlert({ orders, todayIso }: { orders: Order[]; todayIso: string }) {
+  const pending = orders.filter((o) => o.status === "pending" && o.end_date >= todayIso).length;
   if (pending === 0) {
     return (
       <div className="bg-tertiary/5 p-4 rounded-xl border border-tertiary/20">
@@ -176,24 +179,24 @@ function PendingAlert({ bookings, todayIso }: { bookings: Booking[]; todayIso: s
 }
 
 /* ---------------- Bookings ---------------- */
-function Bookings({ assets, bookings }: { assets: Asset[]; bookings: Booking[] }) {
+function Bookings({ assets, orders }: { assets: Asset[]; orders: Order[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | BookingStatus>("all");
 
-  const assetName = (b: Booking) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet");
+  const unitsLabel = (o: Order) => o.bookings.map((b) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet")).join(", ");
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return [...bookings]
-      .filter((b) => (filter === "all" ? true : b.status === filter))
-      .filter((b) => !needle || b.customer.toLowerCase().includes(needle) || b.id.toLowerCase().includes(needle))
+    return [...orders]
+      .filter((o) => (filter === "all" ? true : o.status === filter))
+      .filter((o) => !needle || o.customer.toLowerCase().includes(needle) || o.orderId.toLowerCase().includes(needle))
       .sort((a, b) => b.start_date.localeCompare(a.start_date));
-  }, [bookings, q, filter]);
+  }, [orders, q, filter]);
 
-  const setStatus = (id: string, status: BookingStatus) =>
-    startTransition(async () => { await setBookingStatusAction(id, status); router.refresh(); });
+  const setStatus = (orderId: string, status: BookingStatus) =>
+    startTransition(async () => { await setOrderStatusAction(orderId, status); router.refresh(); });
 
   const filters: ("all" | BookingStatus)[] = ["all", "pending", "confirmed", "cancelled"];
 
@@ -227,31 +230,31 @@ function Bookings({ assets, bookings }: { assets: Asset[]; bookings: Booking[] }
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
-            <tr><Th>Delivery</Th><Th>Customer</Th><Th>Unit</Th><Th>Days</Th><Th>Total</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
+            <tr><Th>Delivery</Th><Th>Customer</Th><Th>Units</Th><Th>Days</Th><Th>Total</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
           </thead>
           <tbody className="divide-y divide-outline-variant/60">
             {rows.length === 0 && (
               <tr><td colSpan={7} className="px-6 py-10 text-center text-on-surface-variant font-body-md">No bookings match.</td></tr>
             )}
-            {rows.map((b) => (
-              <tr key={b.id} className={pending ? "opacity-60" : ""}>
-                <td className="px-6 py-4 font-body-md whitespace-nowrap">{prettyDate(b.start_date)} - {prettyDate(b.end_date)}</td>
+            {rows.map((o) => (
+              <tr key={o.orderId} className={pending ? "opacity-60" : ""}>
+                <td className="px-6 py-4 font-body-md whitespace-nowrap">{prettyDate(o.start_date)} - {prettyDate(o.end_date)}</td>
                 <td className="px-6 py-4 font-label-md">
-                  {b.customer}
-                  <div className="font-code-sm text-on-surface-variant text-xs">#{b.id.slice(0, 8).toUpperCase()}</div>
+                  {o.customer}
+                  <div className="font-code-sm text-on-surface-variant text-xs">#{o.orderId.slice(0, 8).toUpperCase()}</div>
                 </td>
-                <td className="px-6 py-4 font-body-md text-on-surface-variant">{assetName(b)}</td>
-                <td className="px-6 py-4 font-body-md">{b.days}</td>
-                <td className="px-6 py-4 font-label-md">{ZAR(b.price_total)}</td>
-                <td className="px-6 py-4"><StatusPill status={b.status} /></td>
+                <td className="px-6 py-4 font-body-md text-on-surface-variant">{unitsLabel(o)}</td>
+                <td className="px-6 py-4 font-body-md">{o.days}</td>
+                <td className="px-6 py-4 font-label-md">{ZAR(o.total)}</td>
+                <td className="px-6 py-4"><StatusPill status={o.status} /></td>
                 <td className="px-6 py-4 text-right whitespace-nowrap">
-                  {b.status === "pending" && (
-                    <button onClick={() => setStatus(b.id, "confirmed")} className="text-tertiary font-label-md text-label-md hover:underline mr-3">Confirm</button>
+                  {o.status === "pending" && (
+                    <button onClick={() => setStatus(o.orderId, "confirmed")} className="text-tertiary font-label-md text-label-md hover:underline mr-3">Confirm</button>
                   )}
-                  {b.status !== "cancelled" ? (
-                    <button onClick={() => setStatus(b.id, "cancelled")} className="text-error font-label-md text-label-md hover:underline">Cancel</button>
+                  {o.status !== "cancelled" ? (
+                    <button onClick={() => setStatus(o.orderId, "cancelled")} className="text-error font-label-md text-label-md hover:underline">Cancel</button>
                   ) : (
-                    <button onClick={() => setStatus(b.id, "pending")} className="text-primary font-label-md text-label-md hover:underline">Restore</button>
+                    <button onClick={() => setStatus(o.orderId, "pending")} className="text-primary font-label-md text-label-md hover:underline">Restore</button>
                   )}
                 </td>
               </tr>

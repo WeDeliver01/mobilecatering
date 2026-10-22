@@ -29,7 +29,7 @@ export default async function InvoicePage({ params }: { params: { bookingId: str
           <div className="flex flex-col gap-1">
             <p className="text-xs uppercase font-bold text-on-surface-variant tracking-wider">Billed to</p>
             <p className="font-label-md text-on-surface">{booking.customer}</p>
-            <p className="text-on-surface-variant text-sm">{booking.delivery_address}</p>
+            <p className="text-on-surface-variant text-sm">{booking.billing_address || booking.delivery_address}</p>
           </div>
           <div className="flex flex-col gap-1">
             <p className="text-xs uppercase font-bold text-on-surface-variant tracking-wider">Hire period</p>
@@ -37,9 +37,13 @@ export default async function InvoicePage({ params }: { params: { bookingId: str
             <p className="text-on-surface-variant text-sm">{booking.days} day{booking.days === 1 ? "" : "s"} on hire</p>
           </div>
         </div>
-        <div className="border-y border-outline-variant py-4 flex justify-between">
-          <span>{booking.asset_type === "fridge" ? "Mobile Fridge hire" : "Double Toilet hire"}</span>
-          <span className="font-label-md font-bold">{ZAR(invoice.total)}</span>
+        <div className="border-y border-outline-variant py-4 space-y-2">
+          {invoice.items.map((line, i) => (
+            <div key={i} className="flex justify-between">
+              <span>{line.label}</span>
+              <span className="font-label-md font-bold">{ZAR(line.amount)}</span>
+            </div>
+          ))}
         </div>
         <div className="flex justify-between items-baseline">
           <span className="text-xl font-headline-md">Total paid</span>

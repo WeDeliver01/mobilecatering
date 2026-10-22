@@ -38,19 +38,35 @@ export async function initSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE assets ADD COLUMN IF NOT EXISTS image_url TEXT`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS bookings (
     id TEXT PRIMARY KEY,
+    order_id TEXT,
     asset_type TEXT NOT NULL,
     asset_id TEXT,
     customer TEXT NOT NULL DEFAULT '',
     start_date TEXT NOT NULL,
     end_date TEXT NOT NULL,
+    delivery_time TEXT NOT NULL DEFAULT '',
+    collection_time TEXT NOT NULL DEFAULT '',
     days INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'pending',
     price_total INTEGER NOT NULL DEFAULT 0,
     delivery_address TEXT NOT NULL DEFAULT '',
+    billing_address TEXT NOT NULL DEFAULT '',
     zone TEXT NOT NULL DEFAULT '',
     site_contact TEXT NOT NULL DEFAULT '',
+    event_type TEXT NOT NULL DEFAULT '',
+    customer_phone TEXT NOT NULL DEFAULT '',
+    customer_whatsapp BOOLEAN NOT NULL DEFAULT FALSE,
+    customer_email TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
   )`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS order_id TEXT`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_time TEXT NOT NULL DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS collection_time TEXT NOT NULL DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS billing_address TEXT NOT NULL DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone TEXT NOT NULL DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_whatsapp BOOLEAN NOT NULL DEFAULT FALSE`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_email TEXT NOT NULL DEFAULT ''`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS quotes (
     id TEXT PRIMARY KEY,
     quote_code TEXT NOT NULL UNIQUE,
@@ -61,21 +77,27 @@ export async function initSchema(): Promise<void> {
     created_at TEXT NOT NULL
   )`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_bookings_type_dates ON bookings (asset_type, start_date, end_date)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_bookings_order ON bookings (order_id)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS payments (
-    id TEXT PRIMARY KEY, booking_id TEXT NOT NULL, amount INTEGER NOT NULL,
+    id TEXT PRIMARY KEY, order_id TEXT, booking_id TEXT NOT NULL, amount INTEGER NOT NULL,
     gateway TEXT NOT NULL DEFAULT 'payfast', reference TEXT NOT NULL UNIQUE,
     status TEXT NOT NULL DEFAULT 'pending', paid_at TEXT, created_at TEXT NOT NULL
   )`);
+  await db.execute(sql`ALTER TABLE payments ADD COLUMN IF NOT EXISTS order_id TEXT`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS invoices (
-    id TEXT PRIMARY KEY, booking_id TEXT NOT NULL UNIQUE, invoice_number TEXT NOT NULL UNIQUE,
-    total INTEGER NOT NULL, issued_at TEXT NOT NULL
+    id TEXT PRIMARY KEY, order_id TEXT, booking_id TEXT NOT NULL UNIQUE, invoice_number TEXT NOT NULL UNIQUE,
+    total INTEGER NOT NULL, items_json TEXT NOT NULL DEFAULT '[]', issued_at TEXT NOT NULL
   )`);
+  await db.execute(sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS order_id TEXT`);
+  await db.execute(sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS items_json TEXT NOT NULL DEFAULT '[]'`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS deliveries (
-    id TEXT PRIMARY KEY, booking_id TEXT NOT NULL UNIQUE, origin_address TEXT NOT NULL,
+    id TEXT PRIMARY KEY, order_id TEXT, booking_id TEXT NOT NULL UNIQUE, origin_address TEXT NOT NULL,
     destination_address TEXT NOT NULL, distance_km INTEGER, duration_minutes INTEGER,
     delivery_fee INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'scheduled'
   )`);
+  await db.execute(sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS order_id TEXT`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments (booking_id)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_payments_order ON payments (order_id)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY, value TEXT NOT NULL
   )`);

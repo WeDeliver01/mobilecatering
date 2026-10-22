@@ -3,7 +3,7 @@ import { getDb } from "./client";
 import * as schema from "./schema";
 import type {
   Asset, Booking, Quote, AssetType, BookingStatus, QuoteSnapshot, Payment, Invoice, Delivery,
-  PaymentStatus, DeliveryStatus, SiteContent, GalleryImage,
+  PaymentStatus, DeliveryStatus, SiteContent, GalleryImage, InvoiceLineItem,
 } from "@/lib/types";
 import { DEFAULT_PRICING, type PricingSettings } from "@/lib/pricing";
 
@@ -28,17 +28,25 @@ const toAsset = (r: AssetRow): Asset => ({
 
 const toBooking = (r: BookingRow): Booking => ({
   id: r.id,
+  order_id: r.order_id ?? null,
   asset_type: r.asset_type as AssetType,
   asset_id: r.asset_id,
   customer: r.customer,
   start_date: r.start_date,
   end_date: r.end_date,
+  delivery_time: r.delivery_time,
+  collection_time: r.collection_time,
   days: r.days,
   status: r.status as BookingStatus,
   price_total: r.price_total,
   delivery_address: r.delivery_address,
+  billing_address: r.billing_address,
   zone: r.zone,
   site_contact: r.site_contact,
+  event_type: r.event_type,
+  customer_phone: r.customer_phone,
+  customer_whatsapp: r.customer_whatsapp,
+  customer_email: r.customer_email,
   created_at: r.created_at,
 });
 
@@ -51,11 +59,20 @@ const toQuote = (r: QuoteRow): Quote => ({
   converted_booking_id: r.converted_booking_id,
   created_at: r.created_at,
 });
-const toPayment = (r: PaymentRow): Payment => ({ ...r, status: r.status as PaymentStatus, paid_at: r.paid_at ?? null });
-const toInvoice = (r: InvoiceRow): Invoice => ({ ...r });
+const toPayment = (r: PaymentRow): Payment => ({
+  ...r, order_id: r.order_id ?? null, status: r.status as PaymentStatus, paid_at: r.paid_at ?? null,
+});
+const toInvoice = (r: InvoiceRow): Invoice => {
+  let items: InvoiceLineItem[] = [];
+  try { items = JSON.parse(r.items_json) as InvoiceLineItem[]; } catch { items = []; }
+  return {
+    id: r.id, order_id: r.order_id ?? null, booking_id: r.booking_id,
+    invoice_number: r.invoice_number, total: r.total, items, issued_at: r.issued_at,
+  };
+};
 const toDelivery = (r: DeliveryRow): Delivery => ({
-  ...r, distance_km: r.distance_km ?? null, duration_minutes: r.duration_minutes ?? null,
-  status: r.status as DeliveryStatus,
+  ...r, order_id: r.order_id ?? null, distance_km: r.distance_km ?? null,
+  duration_minutes: r.duration_minutes ?? null, status: r.status as DeliveryStatus,
 });
 
 export async function getAssets(): Promise<Asset[]> {
@@ -106,6 +123,27 @@ export async function getInvoiceByBookingId(bookingId: string): Promise<Invoice 
   return rows[0] ? toInvoice(rows[0]) : undefined;
 }
 
+export async function getInvoiceByOrderId(orderOrBookingId: string): Promise<Invoice | undefined> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.invoices);
+  const row = rows.find((r) => (r.order_id ?? r.booking_id) === orderOrBookingId);
+  return row ? toInvoice(row) : undefined;
+}
+
+export async function getPaymentByOrderId(orderOrBookingId: string): Promise<Payment | undefined> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.payments);
+  const row = rows.find((r) => (r.order_id ?? r.booking_id) === orderOrBookingId);
+  return row ? toPayment(row) : undefined;
+}
+
+export async function getDeliveryByOrderId(orderOrBookingId: string): Promise<Delivery | undefined> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.deliveries);
+  const row = rows.find((r) => (r.order_id ?? r.booking_id) === orderOrBookingId);
+  return row ? toDelivery(row) : undefined;
+}
+
 export async function getQuoteByCode(code: string): Promise<Quote | undefined> {
   const db = await getDb();
   const rows = await db.select().from(schema.quotes).where(eq(schema.quotes.quote_code, code)).limit(1);
@@ -129,7 +167,11 @@ export async function insertDelivery(delivery: Delivery): Promise<void> {
 
 export async function insertInvoice(invoice: Invoice): Promise<void> {
   const db = await getDb();
-  await db.insert(schema.invoices).values(invoice);
+  await db.insert(schema.invoices).values({
+    id: invoice.id, order_id: invoice.order_id, booking_id: invoice.booking_id,
+    invoice_number: invoice.invoice_number, total: invoice.total,
+    items_json: JSON.stringify(invoice.items), issued_at: invoice.issued_at,
+  });
 }
 
 export async function markPaymentPaid(reference: string): Promise<Payment | undefined> {
@@ -180,6 +222,22 @@ export async function updateAsset(
 export async function setBookingStatus(id: string, status: BookingStatus): Promise<void> {
   const db = await getDb();
   await db.update(schema.bookings).set({ status }).where(eq(schema.bookings.id, id));
+}
+
+// Updates every item in an order together. orderOrBookingId may be a real
+// order_id, or a single booking's own id for a legacy row with no order_id.
+export async function setOrderStatus(orderOrBookingId: string, status: BookingStatus): Promise<void> {
+  const db = await getDb();
+  await db.execute(sql`UPDATE bookings SET status = ${status}
+    WHERE order_id = ${orderOrBookingId} OR (order_id IS NULL AND id = ${orderOrBookingId})`);
+}
+
+export async function getBookingsByOrderId(orderOrBookingId: string): Promise<Booking[]> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.bookings);
+  return rows
+    .filter((r) => (r.order_id ?? r.id) === orderOrBookingId)
+    .map(toBooking);
 }
 
 export async function markQuoteConverted(quoteId: string, bookingId: string): Promise<void> {

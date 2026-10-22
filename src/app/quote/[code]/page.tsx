@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getQuoteByCode, expireOldQuotes, getPricingSettings } from "@/db/repo";
+import { getQuoteByCode, expireOldQuotes } from "@/db/repo";
 import { QuoteView } from "@/components/booking/QuoteView";
 import { Icon } from "@/components/ui/Icon";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function QuotePage({ params }: { params: { code: string } }) {
   await expireOldQuotes();
-  const [quote, pricing] = await Promise.all([getQuoteByCode(params.code), getPricingSettings()]);
+  const quote = await getQuoteByCode(params.code);
 
   if (!quote) {
     return (
@@ -30,5 +30,5 @@ export default async function QuotePage({ params }: { params: { code: string } }
     );
   }
 
-  return <QuoteView quote={quote} waiverFee={pricing.waiverFee} />;
+  return <QuoteView quote={quote} />;
 }

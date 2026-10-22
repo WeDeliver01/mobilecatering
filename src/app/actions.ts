@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   getAssets, getBookings, getAssetById, insertBooking, insertQuote,
-  getQuoteByCode, markQuoteConverted, updateAsset, setBookingStatus, addAsset,
+  getQuoteByCode, markQuoteConverted, updateAsset, setOrderStatus, addAsset,
   insertPayment, insertDelivery, getPricingSettings,
 } from "@/db/repo";
 import { windowAvailability } from "@/lib/availability";
@@ -11,19 +11,25 @@ import { computePrice, deliveryFeeForDistance, type PricingSettings } from "@/li
 import { depotDistanceTo, type RouteDistance } from "@/lib/geo";
 import { billedDays, iso, today, addDays } from "@/lib/dates";
 import { generateQuoteCode, uid } from "@/lib/quote";
-import type { AssetType, BookingStatus, Booking, QuoteSnapshot } from "@/lib/types";
+import type { AssetType, BookingStatus, Booking, QuoteSnapshot, OrderItem } from "@/lib/types";
 
 export interface BookingInput {
-  assetType: AssetType;
-  assetId: string;
+  items: { assetType: AssetType; assetId: string }[];
   start: string;
   end: string;
+  deliveryTime: string;
+  collectionTime: string;
   waiver: boolean;
   address: string;
   addressLat?: number;
   addressLon?: number;
+  billingAddress: string;
   siteContact: string;
+  eventType: string;
   customer: string;
+  customerPhone: string;
+  customerWhatsapp: boolean;
+  customerEmail: string;
 }
 
 async function resolveDelivery(
@@ -39,39 +45,67 @@ async function resolveDelivery(
   return { dist, deliveryFee, zoneLabel };
 }
 
-async function buildBooking(
+// Validates and prices every item in one checkout, returning one Booking row
+// per item (all sharing a fresh order_id) plus the order total. Nothing is
+// inserted here, so a bad item aborts the whole order cleanly.
+async function buildOrder(
   input: BookingInput,
   status: BookingStatus,
   deliveryFee: number,
   zoneLabel: string,
   waiverFee: number
-): Promise<Booking | { error: string }> {
-  const [assets, bookings] = await Promise.all([getAssets(), getBookings()]);
+): Promise<{ orderId: string; bookings: Booking[]; total: number } | { error: string }> {
+  if (input.items.length === 0) return { error: "Select at least one unit." };
+
+  const [assets, existingBookings] = await Promise.all([getAssets(), getBookings()]);
   const days = billedDays(input.start, input.end);
-  const avail = windowAvailability({
-    assets, bookings, type: input.assetType, start: input.start, end: input.end,
-  });
-  if (avail.status === "unavailable") return { error: "Those dates are fully booked for this unit." };
+  const orderId = uid();
+  const createdAt = new Date().toISOString();
+  const customer = input.customer.trim() || "New customer";
+  const address = input.address.trim();
+  const siteContact = input.siteContact.trim();
 
-  const asset = await getAssetById(input.assetId);
-  if (!asset || !asset.active) return { error: "That unit is not available." };
+  const bookings: Booking[] = [];
+  let base = 0;
 
-  const price = computePrice({ asset, days, deliveryFee, waiver: input.waiver, waiverFee });
-  return {
-    id: uid(),
-    asset_type: input.assetType,
-    asset_id: input.assetId,
-    customer: input.customer.trim() || "New customer",
-    start_date: input.start,
-    end_date: input.end,
-    days,
-    status,
-    price_total: price.total,
-    delivery_address: input.address.trim(),
-    zone: zoneLabel,
-    site_contact: input.siteContact.trim(),
-    created_at: new Date().toISOString(),
-  };
+  for (const item of input.items) {
+    const avail = windowAvailability({
+      assets, bookings: existingBookings, type: item.assetType, start: input.start, end: input.end,
+    });
+    if (avail.status === "unavailable") return { error: `Those dates are fully booked for ${item.assetType}.` };
+
+    const asset = await getAssetById(item.assetId);
+    if (!asset || !asset.active) return { error: "One of the selected units is not available." };
+
+    const itemTotal = asset.daily_rate * days;
+    base += itemTotal;
+    bookings.push({
+      id: uid(),
+      order_id: orderId,
+      asset_type: item.assetType,
+      asset_id: item.assetId,
+      customer,
+      start_date: input.start,
+      end_date: input.end,
+      delivery_time: input.deliveryTime.trim(),
+      collection_time: input.collectionTime.trim(),
+      days,
+      status,
+      price_total: itemTotal,
+      delivery_address: address,
+      billing_address: input.billingAddress.trim(),
+      zone: zoneLabel,
+      site_contact: siteContact,
+      event_type: input.eventType,
+      customer_phone: input.customerPhone.trim(),
+      customer_whatsapp: input.customerWhatsapp,
+      customer_email: input.customerEmail.trim(),
+      created_at: createdAt,
+    });
+  }
+
+  const total = base + deliveryFee + (input.waiver ? waiverFee : 0);
+  return { orderId, bookings, total };
 }
 
 export async function createBookingAction(input: BookingInput) {
@@ -79,15 +113,21 @@ export async function createBookingAction(input: BookingInput) {
   const { dist, deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
   // A pending payment still holds capacity, preventing a checkout race. The
   // PayFast webhook is the only path that promotes it to reserved.
-  const b = await buildBooking(input, "pending", deliveryFee, zoneLabel, settings.waiverFee);
-  if ("error" in b) return { ok: false as const, error: b.error };
-  await insertBooking(b);
-  const reference = `MZ-${b.id.slice(0, 8).toUpperCase()}`;
+  const order = await buildOrder(input, "pending", deliveryFee, zoneLabel, settings.waiverFee);
+  if ("error" in order) return { ok: false as const, error: order.error };
+
+  await Promise.all(order.bookings.map((b) => insertBooking(b)));
+  const firstId = order.bookings[0].id;
+  const reference = `MZ-${order.orderId.slice(0, 8).toUpperCase()}`;
   await Promise.all([
-    insertPayment({ id: uid(), booking_id: b.id, amount: b.price_total, gateway: "payfast", reference, status: "pending", paid_at: null, created_at: new Date().toISOString() }),
+    insertPayment({
+      id: uid(), order_id: order.orderId, booking_id: firstId, amount: order.total,
+      gateway: "payfast", reference, status: "pending", paid_at: null, created_at: new Date().toISOString(),
+    }),
     insertDelivery({
-      id: uid(), booking_id: b.id, origin_address: "Mobile Catering Depot, 1054 Block H, Soshanguve",
-      destination_address: b.delivery_address,
+      id: uid(), order_id: order.orderId, booking_id: firstId,
+      origin_address: "Mobile Catering Depot, 1054 Block H, Soshanguve",
+      destination_address: order.bookings[0].delivery_address,
       distance_km: dist ? Math.round(dist.distanceKm) : null,
       duration_minutes: dist ? dist.durationMinutes : null,
       delivery_fee: deliveryFee, status: "scheduled",
@@ -95,32 +135,49 @@ export async function createBookingAction(input: BookingInput) {
   ]);
   revalidatePath("/");
   revalidatePath("/admin");
-  return { ok: true as const, booking: b, paymentReference: reference };
+  return { ok: true as const, orderId: order.orderId, bookings: order.bookings, total: order.total, paymentReference: reference };
 }
 
 export async function createQuoteAction(input: BookingInput) {
-  const asset = await getAssetById(input.assetId);
-  if (!asset) return { ok: false as const, error: "Unknown unit." };
+  if (input.items.length === 0) return { ok: false as const, error: "Select at least one unit." };
   const days = billedDays(input.start, input.end);
   const settings = await getPricingSettings();
   const { deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
-  const price = computePrice({ asset, days, deliveryFee, waiver: input.waiver, waiverFee: settings.waiverFee });
+
+  const items: OrderItem[] = [];
+  let base = 0;
+  for (const item of input.items) {
+    const asset = await getAssetById(item.assetId);
+    if (!asset) return { ok: false as const, error: "Unknown unit." };
+    items.push({ asset_type: item.assetType, asset_id: item.assetId, asset_name: asset.name, daily_rate: asset.daily_rate });
+    base += asset.daily_rate * days;
+  }
+
+  const waiverFee = input.waiver ? settings.waiverFee : 0;
+  const total = base + deliveryFee + waiverFee;
 
   const snapshot: QuoteSnapshot = {
-    asset_type: input.assetType,
-    asset_id: input.assetId,
-    asset_name: asset.name,
+    items,
     start_date: input.start,
     end_date: input.end,
+    delivery_time: input.deliveryTime.trim(),
+    collection_time: input.collectionTime.trim(),
     days,
     zone: zoneLabel,
     delivery_address: input.address.trim(),
+    billing_address: input.billingAddress.trim(),
     address_lat: input.addressLat ?? null,
     address_lon: input.addressLon ?? null,
     site_contact: input.siteContact.trim(),
     customer: input.customer.trim() || "New customer",
+    event_type: input.eventType,
+    customer_phone: input.customerPhone.trim(),
+    customer_whatsapp: input.customerWhatsapp,
+    customer_email: input.customerEmail.trim(),
     waiver: input.waiver,
-    price_total: price.total,
+    delivery_fee: deliveryFee,
+    waiver_fee: waiverFee,
+    price_total: total,
   };
 
   const code = generateQuoteCode();
@@ -144,13 +201,16 @@ export async function convertQuoteAction(code: string) {
 
   const s = quote.snapshot_json;
   const result = await createBookingAction({
-    assetType: s.asset_type, assetId: s.asset_id ?? "", start: s.start_date, end: s.end_date,
-    waiver: s.waiver, address: s.delivery_address,
+    items: s.items.map((i) => ({ assetType: i.asset_type, assetId: i.asset_id ?? "" })),
+    start: s.start_date, end: s.end_date,
+    deliveryTime: s.delivery_time, collectionTime: s.collection_time,
+    waiver: s.waiver, address: s.delivery_address, billingAddress: s.billing_address,
     addressLat: s.address_lat ?? undefined, addressLon: s.address_lon ?? undefined,
-    siteContact: s.site_contact, customer: s.customer,
+    siteContact: s.site_contact, eventType: s.event_type, customer: s.customer,
+    customerPhone: s.customer_phone, customerWhatsapp: s.customer_whatsapp, customerEmail: s.customer_email,
   });
   if (!result.ok) return result;
-  await markQuoteConverted(quote.id, result.booking.id);
+  await markQuoteConverted(quote.id, result.bookings[0].id);
   revalidatePath(`/quote/${code}`);
   return result;
 }
@@ -165,8 +225,8 @@ export async function updateAssetAction(
   return { ok: true as const };
 }
 
-export async function setBookingStatusAction(id: string, status: BookingStatus) {
-  await setBookingStatus(id, status);
+export async function setOrderStatusAction(orderOrBookingId: string, status: BookingStatus) {
+  await setOrderStatus(orderOrBookingId, status);
   revalidatePath("/admin");
   revalidatePath("/");
   return { ok: true as const };

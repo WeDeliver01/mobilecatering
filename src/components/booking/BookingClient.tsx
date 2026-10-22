@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { Asset, AssetType, AvailabilityResult, Booking } from "@/lib/types";
+import type { Asset, AssetType, AvailabilityResult, AvailabilityVerdict, Booking } from "@/lib/types";
+import { EVENT_TYPES } from "@/lib/types";
 import type { PricingSettings } from "@/lib/pricing";
 import { computePrice, deliveryFeeForDistance } from "@/lib/pricing";
 import { DEPOT, haversineKm } from "@/lib/geo";
@@ -19,7 +20,7 @@ const TYPE_META: Record<AssetType, { icon: string }> = {
 };
 
 type Modal =
-  | { kind: "booking"; booking: Booking; paymentReference?: string }
+  | { kind: "booking"; bookings: Booking[]; paymentReference: string }
   | { kind: "quote"; code: string; expires: string }
   | null;
 
@@ -38,44 +39,52 @@ export function BookingClient({
   );
   const firstAssetOfType = (t: AssetType) => assets.find((a) => a.type === t);
 
-  const [type, setType] = useState<AssetType>(types[0] ?? "fridge");
-  const [assetId, setAssetId] = useState<string>(firstAssetOfType(types[0] ?? "fridge")?.id ?? "");
+  const [selectedTypes, setSelectedTypes] = useState<AssetType[]>(types[0] ? [types[0]] : []);
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
+  const [deliveryTime, setDeliveryTime] = useState("09:00");
+  const [collectionTime, setCollectionTime] = useState("17:00");
   const [waiver, setWaiver] = useState(true);
   const [address, setAddress] = useState("");
   const [addressCoords, setAddressCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [eventType, setEventType] = useState("");
   const [siteContact, setSiteContact] = useState("");
-  const [customer, setCustomer] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [whatsapp, setWhatsapp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [billingDifferent, setBillingDifferent] = useState(false);
+  const [billingAddress, setBillingAddress] = useState("");
 
-  const [avail, setAvail] = useState<AvailabilityResult | null>(null);
+  const [availByType, setAvailByType] = useState<Record<string, AvailabilityResult | null>>({});
   const [modal, setModal] = useState<Modal>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const asset = assets.find((a) => a.id === assetId) ?? firstAssetOfType(type) ?? assets[0];
+  const selectedAssets = selectedTypes.map((t) => firstAssetOfType(t)).filter((a): a is Asset => !!a);
 
-  useEffect(() => {
-    const a = firstAssetOfType(type);
-    if (a && a.id !== assetId && !assets.find((x) => x.id === assetId && x.type === type)) {
-      setAssetId(a.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+  const toggleType = (t: AssetType) => {
+    setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  };
 
   useEffect(() => {
     let cancel = false;
     const id = setTimeout(async () => {
-      try {
-        const r = await fetch(`/api/availability?type=${type}&start=${start}&end=${end}`, { cache: "no-store" });
-        const data = (await r.json()) as AvailabilityResult;
-        if (!cancel) setAvail(data);
-      } catch {
-        if (!cancel) setAvail(null);
-      }
+      const entries = await Promise.all(
+        selectedTypes.map(async (t) => {
+          try {
+            const r = await fetch(`/api/availability?type=${t}&start=${start}&end=${end}`, { cache: "no-store" });
+            return [t, (await r.json()) as AvailabilityResult] as const;
+          } catch {
+            return [t, null] as const;
+          }
+        })
+      );
+      if (!cancel) setAvailByType(Object.fromEntries(entries));
     }, 250);
     return () => { cancel = true; clearTimeout(id); };
-  }, [type, start, end]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTypes.join(","), start, end]);
 
   const days = billedDays(start, end);
   // Live estimate only (straight-line x 1.3, no API call). The authoritative
@@ -84,20 +93,30 @@ export function BookingClient({
     ? haversineKm(DEPOT.lat, DEPOT.lon, addressCoords.lat, addressCoords.lon) * 1.3
     : null;
   const deliveryFee = estimatedDistanceKm != null ? deliveryFeeForDistance(estimatedDistanceKm, pricing) : pricing.deliveryBaseFee;
-  const price = computePrice({ asset: { daily_rate: asset?.daily_rate ?? 0 }, days, deliveryFee, waiver, waiverFee: pricing.waiverFee });
-  const status = avail?.status ?? null;
+  const base = selectedAssets.reduce((s, a) => s + a.daily_rate * days, 0);
+  const price = computePrice({ asset: { daily_rate: base }, days: 1, deliveryFee, waiver, waiverFee: pricing.waiverFee });
+
+  const statuses = selectedTypes.map((t) => availByType[t]?.status).filter((s): s is AvailabilityVerdict => !!s);
+  const status = selectedTypes.length === 0
+    ? null
+    : statuses.length < selectedTypes.length
+    ? null
+    : statuses.includes("unavailable") ? "unavailable" : statuses.includes("limited") ? "limited" : "available";
 
   const payload = (): BookingInput => ({
-    assetType: type, assetId: asset?.id ?? "", start, end, waiver, address,
+    items: selectedAssets.map((a) => ({ assetType: a.type, assetId: a.id })),
+    start, end, deliveryTime, collectionTime, waiver, address,
     addressLat: addressCoords?.lat, addressLon: addressCoords?.lon,
-    siteContact, customer,
+    billingAddress: billingDifferent ? billingAddress : "",
+    siteContact, eventType, customer: fullName,
+    customerPhone: phone, customerWhatsapp: whatsapp, customerEmail: email,
   });
 
   const onConfirm = async () => {
     setSubmitting(true); setError(null);
     const res = await createBookingAction(payload());
     setSubmitting(false);
-    if (res.ok) setModal({ kind: "booking", booking: res.booking, paymentReference: res.paymentReference });
+    if (res.ok) setModal({ kind: "booking", bookings: res.bookings, paymentReference: res.paymentReference });
     else setError(res.error);
   };
   const onSave = async () => {
@@ -111,12 +130,11 @@ export function BookingClient({
     setSubmitting(true); setError(null);
     const res = await convertQuoteAction(code);
     setSubmitting(false);
-    if (res.ok) setModal({ kind: "booking", booking: res.booking, paymentReference: res.paymentReference });
+    if (res.ok) setModal({ kind: "booking", bookings: res.bookings, paymentReference: res.paymentReference });
     else setError(res.error);
   };
 
   const placeholderDays = occupiedDays(start, end);
-  const cap = avail?.capacity ?? 0;
 
   return (
     <div id="top">
@@ -167,22 +185,33 @@ export function BookingClient({
 
             {/* Step 1 */}
             <section className="space-y-4">
-              <StepHead n={1} label="Choose your unit" />
+              <StepHead n={1} label="Choose your units" />
+              <p className="text-xs text-on-surface-variant -mt-2">Select as many as you need, you can hire more than one.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
                 {types.map((t) => {
                   const a = firstAssetOfType(t);
                   if (!a) return null;
                   const m = TYPE_META[t];
-                  const on = type === t;
+                  const on = selectedTypes.includes(t);
                   return (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setType(t)}
-                      className={`text-left bg-surface-container-lowest rounded-xl p-5 border-2 transition-all ${
+                      onClick={() => toggleType(t)}
+                      aria-pressed={on}
+                      className={`text-left bg-surface-container-lowest rounded-xl p-5 border-2 transition-all relative ${
                         on ? "active-tile" : "border-outline-variant hover:border-on-surface-variant"
                       }`}
                     >
+                      <span className={`absolute top-4 right-4 w-6 h-6 rounded-md border-2 flex items-center justify-center ${
+                        on ? "bg-primary border-primary" : "border-outline bg-surface"
+                      }`}>
+                        {on && (
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M3 8.5L6.2 11.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
                       {a.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={a.image_url} alt={a.name} className="w-full h-32 object-cover rounded-lg mb-3" />
@@ -193,7 +222,7 @@ export function BookingClient({
                           </span>
                         </div>
                       )}
-                      <h3 className="font-headline-md text-headline-md mb-1">{a.name}</h3>
+                      <h3 className="font-headline-md text-headline-md mb-1 pr-8">{a.name}</h3>
                       <p className="text-on-surface-variant font-body-md text-sm mb-4">{a.description}</p>
                       <span className="font-headline-lg text-xl text-on-surface">
                         {ZAR(a.daily_rate)}
@@ -207,7 +236,7 @@ export function BookingClient({
 
             {/* Step 2 */}
             <section className="space-y-4 pt-4">
-              <StepHead n={2} label="Select dates" />
+              <StepHead n={2} label="Select dates & times" />
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 grid grid-cols-1 md:grid-cols-2 gap-gutter">
                 <Field label="Delivery date">
                   <input
@@ -220,6 +249,20 @@ export function BookingClient({
                   <input
                     type="date" value={end} min={start}
                     onChange={(e) => setEnd(e.target.value)}
+                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                  />
+                </Field>
+                <Field label="Delivery time">
+                  <input
+                    type="time" value={deliveryTime}
+                    onChange={(e) => setDeliveryTime(e.target.value)}
+                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                  />
+                </Field>
+                <Field label="Collection time">
+                  <input
+                    type="time" value={collectionTime}
+                    onChange={(e) => setCollectionTime(e.target.value)}
                     className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
                   />
                 </Field>
@@ -246,17 +289,19 @@ export function BookingClient({
                       : "Pick a suggestion to price delivery by distance, or type the full address manually."}
                   </p>
                 </Field>
+                <Field label="Event type">
+                  <select
+                    value={eventType} onChange={(e) => setEventType(e.target.value)}
+                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                  >
+                    <option value="">Select event type</option>
+                    {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </Field>
                 <Field label="Site contact person">
                   <input
                     type="text" value={siteContact} onChange={(e) => setSiteContact(e.target.value)}
-                    placeholder="Full name"
-                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
-                  />
-                </Field>
-                <Field label="Booking name / customer">
-                  <input
-                    type="text" value={customer} onChange={(e) => setCustomer(e.target.value)}
-                    placeholder="e.g. Mokoena Family Event"
+                    placeholder="Who should we call when we arrive on site?"
                     className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
                   />
                 </Field>
@@ -275,6 +320,57 @@ export function BookingClient({
                 </div>
               </div>
             </section>
+
+            {/* Step 4 */}
+            <section className="space-y-4 pt-4">
+              <StepHead n={4} label="Your details" />
+              <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-gutter">
+                <Field label="Full name">
+                  <input
+                    type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Thandi Mokoena"
+                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                  />
+                </Field>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+                  <Field label="Contact number">
+                    <input
+                      type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                      placeholder="082 123 4567"
+                      className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                    />
+                    <label className="flex items-center gap-2 mt-2 text-sm text-on-surface-variant cursor-pointer">
+                      <input type="checkbox" checked={whatsapp} onChange={(e) => setWhatsapp(e.target.checked)} className="rounded border-outline" />
+                      This number has WhatsApp
+                    </label>
+                  </Field>
+                  <Field label="Email address (optional)">
+                    <input
+                      type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                    />
+                  </Field>
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-label-md cursor-pointer">
+                    <input
+                      type="checkbox" checked={billingDifferent}
+                      onChange={(e) => setBillingDifferent(e.target.checked)}
+                      className="rounded border-outline"
+                    />
+                    Billing address is different from delivery address
+                  </label>
+                  {billingDifferent && (
+                    <input
+                      type="text" value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)}
+                      placeholder="Billing address"
+                      className="w-full mt-3 bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                    />
+                  )}
+                </div>
+              </div>
+            </section>
           </div>
 
           {/* Sticky quote panel */}
@@ -284,46 +380,67 @@ export function BookingClient({
                 <div className="p-6 space-y-6">
                   <div className="flex justify-between items-center">
                     <h3 className="font-headline-md text-headline-md">Quote summary</h3>
-                    <AvailBadge status={status} minFree={avail?.minFree} />
+                    <AvailBadge status={status} />
                   </div>
 
-                  {/* Capacity strip */}
-                  <div className="space-y-2">
-                    <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">
-                      Unit availability window
-                    </label>
-                    <div className="flex items-end justify-between gap-1 h-12 bg-surface-container-low rounded-lg px-2 py-1">
-                      {(avail?.days ?? placeholderDays.map((d) => ({ date: d, free: -1 }))).map((d) => {
-                        const known = d.free >= 0;
-                        const full = known && d.free <= 0;
-                        const h = !known ? 55 : cap ? Math.max(14, Math.round((d.free / cap) * 100)) : 55;
+                  {/* Capacity strips, one per selected unit */}
+                  {selectedTypes.length > 0 && (
+                    <div className="space-y-3">
+                      <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">
+                        Unit availability window
+                      </label>
+                      {selectedTypes.map((t) => {
+                        const avail = availByType[t];
+                        const cap = avail?.capacity ?? 0;
+                        const assetName = firstAssetOfType(t)?.name ?? t;
                         return (
-                          <div
-                            key={d.date}
-                            title={known ? `${prettyDate(d.date)}: ${d.free} free` : prettyDate(d.date)}
-                            style={{ height: `${h}%` }}
-                            className={`w-full rounded-sm ${
-                              !known ? "bg-surface-container-high" : full ? "bg-error/50" : "bg-tertiary"
-                            }`}
-                          />
+                          <div key={t} className="space-y-1">
+                            <p className="text-[11px] text-on-surface-variant">{assetName}</p>
+                            <div className="flex items-end justify-between gap-1 h-8 bg-surface-container-low rounded-lg px-2 py-1">
+                              {(avail?.days ?? placeholderDays.map((d) => ({ date: d, free: -1 }))).map((d) => {
+                                const known = d.free >= 0;
+                                const full = known && d.free <= 0;
+                                const h = !known ? 55 : cap ? Math.max(14, Math.round((d.free / cap) * 100)) : 55;
+                                return (
+                                  <div
+                                    key={d.date}
+                                    title={known ? `${prettyDate(d.date)}: ${d.free} free` : prettyDate(d.date)}
+                                    style={{ height: `${h}%` }}
+                                    className={`w-full rounded-sm ${
+                                      !known ? "bg-surface-container-high" : full ? "bg-error/50" : "bg-tertiary"
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
                         );
                       })}
+                      <div className="flex justify-between text-[10px] text-on-surface-variant font-label-md">
+                        <span>{prettyDate(start).toUpperCase()}</span>
+                        <span>{prettyDate(end).toUpperCase()}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-[10px] text-on-surface-variant font-label-md">
-                      <span>{prettyDate(start).toUpperCase()}</span>
-                      <span>{prettyDate(end).toUpperCase()}</span>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Price breakdown */}
                   <div className="space-y-3 pt-2">
-                    <Line label={`${asset?.name ?? "Unit"} (${days} day${days > 1 ? "s" : ""})`} value={ZAR(price.base)} />
-                    <Line label="Delivery & setup" value={ZAR(price.delivery)} />
-                    {waiver && <Line label="Damage waiver" value={ZAR(price.waiver)} />}
-                    <div className="border-t border-outline-variant pt-3 flex justify-between items-center">
-                      <span className="font-headline-md text-headline-md">Total</span>
-                      <span className="font-display-lg text-2xl text-on-surface">{ZAR(price.total)}</span>
-                    </div>
+                    {selectedAssets.length === 0 && (
+                      <p className="text-sm text-on-surface-variant">Choose at least one unit to see pricing.</p>
+                    )}
+                    {selectedAssets.map((a) => (
+                      <Line key={a.id} label={`${a.name} (${days} day${days > 1 ? "s" : ""})`} value={ZAR(a.daily_rate * days)} />
+                    ))}
+                    {selectedAssets.length > 0 && (
+                      <>
+                        <Line label="Delivery & setup" value={ZAR(price.delivery)} />
+                        {waiver && <Line label="Damage waiver" value={ZAR(price.waiver)} />}
+                        <div className="border-t border-outline-variant pt-3 flex justify-between items-center">
+                          <span className="font-headline-md text-headline-md">Total</span>
+                          <span className="font-display-lg text-2xl text-on-surface">{ZAR(price.total)}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {error && (
@@ -335,13 +452,13 @@ export function BookingClient({
                   <div className="space-y-3">
                     <button
                       type="button" onClick={onConfirm}
-                      disabled={submitting || status === "unavailable" || !avail}
+                      disabled={submitting || selectedAssets.length === 0 || status === "unavailable"}
                       className="w-full bg-primary text-on-primary py-4 rounded-lg font-bold text-base hover:opacity-90 transition-all active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {status === "unavailable" ? "Unavailable for these dates" : submitting ? "Working..." : "Check availability & price"}
                     </button>
                     <button
-                      type="button" onClick={onSave} disabled={submitting}
+                      type="button" onClick={onSave} disabled={submitting || selectedAssets.length === 0}
                       className="w-full border border-outline text-on-surface py-3 rounded-lg font-bold text-body-md hover:bg-surface-container-low transition-all active:scale-[0.99] disabled:opacity-40"
                     >
                       Save quote and decide later
@@ -368,7 +485,6 @@ export function BookingClient({
         {modal && (
           <ResultModal
             modal={modal}
-            asset={asset}
             onClose={() => setModal(null)}
             onConvert={onConvert}
             submitting={submitting}
@@ -417,7 +533,7 @@ function Line({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AvailBadge({ status, minFree }: { status: string | null; minFree?: number }) {
+function AvailBadge({ status }: { status: string | null }) {
   if (!status) {
     return (
       <div className="bg-surface-container-low text-on-surface-variant px-3 py-1 rounded-full flex items-center gap-1 text-sm font-bold">
@@ -427,7 +543,7 @@ function AvailBadge({ status, minFree }: { status: string | null; minFree?: numb
   }
   const map: Record<string, { cls: string; dot: string; label: string }> = {
     available: { cls: "bg-tertiary-container text-tertiary", dot: "bg-tertiary", label: "Available" },
-    limited: { cls: "bg-secondary-container text-secondary", dot: "bg-secondary", label: minFree != null ? `Limited (${minFree})` : "Limited" },
+    limited: { cls: "bg-secondary-container text-secondary", dot: "bg-secondary", label: "Limited" },
     unavailable: { cls: "bg-error-container text-error", dot: "bg-error", label: "Fully booked" },
   };
   const v = map[status];
@@ -440,10 +556,9 @@ function AvailBadge({ status, minFree }: { status: string | null; minFree?: numb
 }
 
 function ResultModal({
-  modal, asset, onClose, onConvert, submitting,
+  modal, onClose, onConvert, submitting,
 }: {
   modal: Exclude<Modal, null>;
-  asset: Asset | undefined;
   onClose: () => void;
   onConvert: (code: string) => void;
   submitting: boolean;
@@ -468,7 +583,7 @@ function ResultModal({
           <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4">
             <p className="text-xs text-on-surface-variant uppercase font-label-md">{isQuote ? "Quote reference" : "Payment reference"}</p>
             <p className="font-code-sm text-2xl font-bold text-on-surface tracking-widest">
-              {isQuote ? modal.code : modal.paymentReference ?? modal.booking.id.slice(0, 8).toUpperCase()}
+              {isQuote ? modal.code : modal.paymentReference}
             </p>
             {isQuote && <p className="text-[11px] text-on-surface-variant mt-1">Valid until {prettyDate(modal.expires)}</p>}
           </div>
