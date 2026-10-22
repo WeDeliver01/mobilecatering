@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Quote } from "@/lib/types";
 import { ZAR } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
-import { zoneById, WAIVER_FEE } from "@/lib/pricing";
+import { WAIVER_FEE } from "@/lib/pricing";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { convertQuoteAction } from "@/app/actions";
@@ -16,8 +16,6 @@ export function QuoteView({ quote }: { quote: Quote }) {
   const [bookingRef, setBookingRef] = useState<string | null>(quote.converted_booking_id);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const zone = zoneById(s.zone);
 
   const convert = async () => {
     setBusy(true); setError(null);
@@ -44,7 +42,7 @@ export function QuoteView({ quote }: { quote: Quote }) {
             <Row k="Dates" v={`${prettyDate(s.start_date)} - ${prettyDate(s.end_date)} (${s.days} day${s.days > 1 ? "s" : ""})`} />
             <Row k="Customer" v={s.customer} />
             {s.delivery_address && <Row k="Address" v={s.delivery_address} />}
-            <Row k="Zone" v={zone ? `${zone.name} - ${zone.detail}` : s.zone} />
+            <Row k="Delivery distance" v={s.zone} />
             {s.site_contact && <Row k="Site contact" v={s.site_contact} />}
             <Row k="Damage waiver" v={s.waiver ? `${ZAR(WAIVER_FEE)} (on)` : "Not added"} />
           </div>

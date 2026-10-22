@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Asset, AssetType, AvailabilityResult, Booking } from "@/lib/types";
-import { ZONES, WAIVER_FEE, computePrice } from "@/lib/pricing";
+import { WAIVER_FEE, DELIVERY_BASE_FEE, computePrice, deliveryFeeForDistance } from "@/lib/pricing";
+import { DEPOT, haversineKm } from "@/lib/geo";
 import { billedDays, occupiedDays, prettyDate } from "@/lib/dates";
 import { ZAR } from "@/lib/format";
 import { Icon } from "@/components/ui/Icon";
+import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
+import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
 import { createBookingAction, createQuoteAction, convertQuoteAction, type BookingInput } from "@/app/actions";
 
 const TYPE_META: Record<AssetType, { icon: string }> = {
@@ -37,9 +40,9 @@ export function BookingClient({
   const [assetId, setAssetId] = useState<string>(firstAssetOfType(types[0] ?? "fridge")?.id ?? "");
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
-  const [zoneId, setZoneId] = useState(ZONES[0].id);
   const [waiver, setWaiver] = useState(true);
   const [address, setAddress] = useState("");
+  const [addressCoords, setAddressCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [siteContact, setSiteContact] = useState("");
   const [customer, setCustomer] = useState("");
 
@@ -73,11 +76,19 @@ export function BookingClient({
   }, [type, start, end]);
 
   const days = billedDays(start, end);
-  const price = computePrice({ asset: { daily_rate: asset?.daily_rate ?? 0 }, days, zoneId, waiver });
+  // Live estimate only (straight-line × 1.3, no API call) — the authoritative
+  // fee is computed server-side from real driving distance on submit.
+  const estimatedDistanceKm = addressCoords
+    ? haversineKm(DEPOT.lat, DEPOT.lon, addressCoords.lat, addressCoords.lon) * 1.3
+    : null;
+  const deliveryFee = estimatedDistanceKm != null ? deliveryFeeForDistance(estimatedDistanceKm) : DELIVERY_BASE_FEE;
+  const price = computePrice({ asset: { daily_rate: asset?.daily_rate ?? 0 }, days, deliveryFee, waiver });
   const status = avail?.status ?? null;
 
   const payload = (): BookingInput => ({
-    assetType: type, assetId: asset?.id ?? "", start, end, zoneId, waiver, address, siteContact, customer,
+    assetType: type, assetId: asset?.id ?? "", start, end, waiver, address,
+    addressLat: addressCoords?.lat, addressLon: addressCoords?.lon,
+    siteContact, customer,
   });
 
   const onConfirm = async () => {
@@ -216,31 +227,25 @@ export function BookingClient({
               <StepHead n={3} label="Delivery details" />
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-gutter">
                 <Field label="Street address">
-                  <input
-                    type="text" value={address} onChange={(e) => setAddress(e.target.value)}
+                  <AddressAutocomplete
+                    value={address}
+                    onChange={(text) => { setAddress(text); setAddressCoords(null); }}
+                    onSelect={(s) => { setAddress(s.formatted); setAddressCoords({ lat: s.lat, lon: s.lon }); }}
                     placeholder="e.g. 152 Jan Smuts Ave, Rosebank"
+                  />
+                  <p className="text-xs text-on-surface-variant">
+                    {addressCoords
+                      ? `Delivery fee is estimated from this pin — ${ZAR(deliveryFee)}.`
+                      : "Pick a suggestion to price delivery by distance, or type the full address manually."}
+                  </p>
+                </Field>
+                <Field label="Site contact person">
+                  <input
+                    type="text" value={siteContact} onChange={(e) => setSiteContact(e.target.value)}
+                    placeholder="Full name"
                     className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
                   />
                 </Field>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-                  <Field label="Delivery zone">
-                    <select
-                      value={zoneId} onChange={(e) => setZoneId(e.target.value)}
-                      className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
-                    >
-                      {ZONES.map((z) => (
-                        <option key={z.id} value={z.id}>{z.name} - {z.detail} ({ZAR(z.fee)})</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Site contact person">
-                    <input
-                      type="text" value={siteContact} onChange={(e) => setSiteContact(e.target.value)}
-                      placeholder="Full name"
-                      className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
-                    />
-                  </Field>
-                </div>
                 <Field label="Booking name / customer">
                   <input
                     type="text" value={customer} onChange={(e) => setCustomer(e.target.value)}

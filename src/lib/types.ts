@@ -38,8 +38,10 @@ export interface QuoteSnapshot {
   start_date: string;
   end_date: string;
   days: number;
-  zone: string;
+  zone: string; // human-readable delivery distance description, e.g. "12.4 km from depot"
   delivery_address: string;
+  address_lat: number | null;
+  address_lon: number | null;
   site_contact: string;
   customer: string;
   waiver: boolean;
