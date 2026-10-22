@@ -22,13 +22,7 @@ export default async function GalleryPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-container-padding py-stack-lg space-y-20">
-      <nav className="flex gap-6 border-b border-outline-variant pb-4 text-sm font-bold">
-        <a href="#gallery" className="text-on-surface hover:text-primary">Gallery</a>
-        <a href="#about" className="text-on-surface hover:text-primary">About</a>
-        <a href="#terms" className="text-on-surface hover:text-primary">Terms &amp; policies</a>
-      </nav>
-
-      <section id="gallery" className="space-y-6">
+      <section id="gallery" className="space-y-6 scroll-mt-32">
         <h1 className="font-headline-lg text-headline-lg text-on-surface">Gallery</h1>
         {images.length === 0 ? (
           <p className="text-on-surface-variant">
@@ -49,12 +43,12 @@ export default async function GalleryPage() {
         )}
       </section>
 
-      <section id="about" className="space-y-4">
+      <section id="about" className="space-y-4 scroll-mt-32">
         <h2 className="font-headline-lg text-headline-lg text-on-surface">{about?.title || "About"}</h2>
         <Paragraphs text={about?.body || "No content yet."} />
       </section>
 
-      <section id="terms" className="space-y-4">
+      <section id="terms" className="space-y-4 scroll-mt-32">
         <h2 className="font-headline-lg text-headline-lg text-on-surface">{terms?.title || "Terms & policies"}</h2>
         <Paragraphs text={terms?.body || "No content yet."} />
       </section>
