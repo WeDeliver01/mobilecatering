@@ -26,7 +26,7 @@ export function AddressAutocomplete({
     if (skipNextRef.current) { skipNextRef.current = false; return; }
 
     const key = value.trim().toLowerCase();
-    if (key.length < 3) { setSuggestions([]); return; }
+    if (key.length < 4) { setSuggestions([]); return; }
 
     const cached = cacheRef.current.get(key);
     if (cached) { setSuggestions(cached); setOpen(cached.length > 0); return; }

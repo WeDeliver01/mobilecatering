@@ -1,4 +1,5 @@
 import { routeCache, roundCoord } from "./geoCache";
+import { tryReserveGeoapifyCall } from "./geoBudget";
 
 // Fixed depot origin for delivery-distance pricing.
 // Approximate (suburb-level) coordinates for 1054 Block H, Soshanguve, good
@@ -51,7 +52,7 @@ export async function depotDistanceTo(lat: number, lon: number): Promise<RouteDi
 
 async function fetchDistance(lat: number, lon: number): Promise<RouteDistance> {
   const key = process.env.GEOAPIFY_API_KEY;
-  if (key) {
+  if (key && tryReserveGeoapifyCall()) {
     try {
       const url = `https://api.geoapify.com/v1/routing?waypoints=${DEPOT.lat},${DEPOT.lon}|${lat},${lon}&mode=drive&apiKey=${key}`;
       const r = await fetch(url, { signal: AbortSignal.timeout(5000) });

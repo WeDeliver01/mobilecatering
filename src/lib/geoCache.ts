@@ -25,11 +25,15 @@ class TtlCache<T> {
   }
 }
 
-// Address text -> suggestion list. Addresses don't change, so cache for a day.
-export const autocompleteCache = new TtlCache<unknown>(24 * 60 * 60 * 1000);
+// Address text -> suggestion list. Addresses don't change, so cache for a
+// day, with room for a lot of distinct prefixes (cheap: small strings and
+// short arrays) rather than evicting and re-paying for a lookup sooner
+// than necessary.
+export const autocompleteCache = new TtlCache<unknown>(24 * 60 * 60 * 1000, 5000);
 
-// "lat,lon" (rounded) -> route distance. Static for a given point, cache for a month.
-export const routeCache = new TtlCache<unknown>(30 * 24 * 60 * 60 * 1000);
+// "lat,lon" (rounded) -> route distance. Static for a given point, cache
+// for a month - there's no reason this should ever expire sooner.
+export const routeCache = new TtlCache<unknown>(30 * 24 * 60 * 60 * 1000, 2000);
 
 // Rounds to ~11m precision so nearby points (same venue, slightly different
 // pins) share one cache entry instead of each costing a fresh routing call.

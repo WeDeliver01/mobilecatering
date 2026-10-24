@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { DEPOT } from "@/lib/geo";
 import { autocompleteCache } from "@/lib/geoCache";
+import { tryReserveGeoapifyCall } from "@/lib/geoBudget";
+import { isRateLimited, clientIp } from "@/lib/rateLimit";
+
+// Generous enough for genuine fast typing (well above the 450ms client
+// debounce), tight enough to stop one client from burning the shared daily
+// Geoapify budget on its own.
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
 
 export interface AddressSuggestion {
   formatted: string;
@@ -22,13 +30,23 @@ export async function GET(req: NextRequest) {
   const text = req.nextUrl.searchParams.get("text")?.trim() ?? "";
   const key = process.env.GEOAPIFY_API_KEY;
 
-  if (!key || text.length < 3) {
+  if (!key || text.length < 4) {
     return NextResponse.json({ suggestions: [] as AddressSuggestion[] });
   }
 
   const cacheKey = text.toLowerCase();
   const cached = autocompleteCache.get(cacheKey) as AddressSuggestion[] | undefined;
   if (cached) return NextResponse.json({ suggestions: cached });
+
+  // Rate limit only applies to cache misses - a client hammering the same
+  // already-cached prefix costs nothing anyway, so there's no reason to
+  // penalize it.
+  if (isRateLimited(clientIp(req.headers), RATE_LIMIT, RATE_WINDOW_MS)) {
+    return NextResponse.json({ suggestions: [] as AddressSuggestion[] });
+  }
+  if (!tryReserveGeoapifyCall()) {
+    return NextResponse.json({ suggestions: [] as AddressSuggestion[] });
+  }
 
   const url =
     `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(text)}` +

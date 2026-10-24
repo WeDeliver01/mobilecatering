@@ -5,6 +5,7 @@ import {
 import { AdminTabs } from "@/components/admin/AdminTabs";
 import { AdminLogoutButton } from "@/components/ui/AdminLogoutButton";
 import { iso, today } from "@/lib/dates";
+import { geoapifyBudgetStatus } from "@/lib/geoBudget";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function AdminPage() {
       <AdminTabs
         assets={assets} bookings={bookings} payments={payments} quotes={quotes} todayIso={iso(today())}
         pricing={pricing} siteContent={siteContent} galleryImages={galleryImages} company={company}
+        geoapifyBudget={geoapifyBudgetStatus()}
       />
     </div>
   );

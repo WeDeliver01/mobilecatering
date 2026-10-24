@@ -21,7 +21,7 @@ type Tab = "overview" | "bookings" | "assets" | "settings";
 const TYPE_ICON: Record<AssetType, string> = { fridge: "ac_unit", toilet: "wc" };
 
 export function AdminTabs({
-  assets, bookings, payments, quotes, todayIso, pricing, siteContent, galleryImages, company,
+  assets, bookings, payments, quotes, todayIso, pricing, siteContent, galleryImages, company, geoapifyBudget,
 }: {
   assets: Asset[];
   bookings: Booking[];
@@ -32,6 +32,7 @@ export function AdminTabs({
   siteContent: SiteContent[];
   galleryImages: GalleryImage[];
   company: CompanySettings;
+  geoapifyBudget: { used: number; limit: number; day: string };
 }) {
   const orders = useMemo(() => groupOrders(bookings, payments), [bookings, payments]);
   const [tab, setTab] = useState<Tab>("overview");
@@ -58,7 +59,7 @@ export function AdminTabs({
         ))}
       </div>
 
-      {tab === "overview" && <Overview assets={assets} orders={orders} quotes={quotes} todayIso={todayIso} />}
+      {tab === "overview" && <Overview assets={assets} orders={orders} quotes={quotes} todayIso={todayIso} geoapifyBudget={geoapifyBudget} />}
       {tab === "bookings" && <Bookings assets={assets} orders={orders} />}
       {tab === "assets" && <Assets assets={assets} />}
       {tab === "settings" && <Settings pricing={pricing} siteContent={siteContent} galleryImages={galleryImages} company={company} />}
@@ -68,9 +69,10 @@ export function AdminTabs({
 
 /* ---------------- Overview ---------------- */
 function Overview({
-  assets, orders, quotes, todayIso,
+  assets, orders, quotes, todayIso, geoapifyBudget,
 }: {
   assets: Asset[]; orders: Order[]; quotes: Quote[]; todayIso: string;
+  geoapifyBudget: { used: number; limit: number; day: string };
 }) {
   const confirmed = orders.filter((o) => o.status === "confirmed");
   const revenueHeld = confirmed.reduce((s, o) => s + o.total, 0);
@@ -79,6 +81,7 @@ function Overview({
   const convRate = quotes.length
     ? Math.round((quotes.filter((q) => q.status === "converted").length / quotes.length) * 100)
     : null;
+  const geoPct = geoapifyBudget.limit ? Math.round((geoapifyBudget.used / geoapifyBudget.limit) * 100) : 0;
 
   const unitsLabel = (o: Order) => o.bookings.map((b) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet")).join(", ");
 
@@ -89,6 +92,23 @@ function Overview({
         <Stat label="Revenue Held" value={ZARk(revenueHeld)} foot="Confirmed value" />
         <Stat label="Upcoming Deliveries" value={String(upcoming.length)} foot="From today" />
         <Stat label="Quote Conversion" value={convRate === null ? "-" : `${convRate}%`} foot={quotes.length ? `${quotes.length} quotes` : "No quotes yet"} />
+      </div>
+      <div className="mb-stack-lg bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Geoapify usage today</p>
+          <p className="text-xs text-on-surface-variant mt-0.5">Address autocomplete + delivery distance lookups, shared daily budget. Resets at UTC midnight.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`font-headline-md text-lg ${geoPct >= 90 ? "text-error" : geoPct >= 70 ? "text-secondary" : "text-on-surface"}`}>
+            {geoapifyBudget.used} / {geoapifyBudget.limit}
+          </span>
+          <div className="w-24 h-2 bg-surface-container-high rounded-full overflow-hidden">
+            <div
+              className={`h-full ${geoPct >= 90 ? "bg-error" : geoPct >= 70 ? "bg-secondary" : "bg-tertiary"}`}
+              style={{ width: `${Math.min(100, geoPct)}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
