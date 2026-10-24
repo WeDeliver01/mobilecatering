@@ -7,7 +7,7 @@ import { EVENT_TYPES } from "@/lib/types";
 import type { PricingSettings } from "@/lib/pricing";
 import { computePrice, deliveryFeeForDistance } from "@/lib/pricing";
 import { DEPOT, haversineKm } from "@/lib/geo";
-import { billedDays, occupiedDays, prettyDate } from "@/lib/dates";
+import { billedDays, prettyDate } from "@/lib/dates";
 import { ZAR } from "@/lib/format";
 import { Icon } from "@/components/ui/Icon";
 import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
@@ -153,8 +153,6 @@ export function BookingClient({
     } else setError(res.error);
   };
 
-  const placeholderDays = occupiedDays(start, end);
-
   // Prefer a photo of whatever's selected; otherwise show any real unit
   // photo that's been uploaded (Admin > Assets), so this never shows a
   // stock/fake image, only what's actually on file for the fleet.
@@ -179,70 +177,15 @@ export function BookingClient({
               <Check label="Across Gauteng" />
             </div>
           </div>
-          <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
+          <div className="lg:col-span-4 rounded-xl overflow-hidden border border-outline-variant h-64 lg:h-full">
             {heroImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={heroImage.url} alt={heroImage.alt} className="w-full h-40 object-cover" />
+              <img src={heroImage.url} alt={heroImage.alt} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-40 bg-surface-container-low flex items-center justify-center text-on-surface-variant">
-                <Icon name={selectedTypes[0] ? TYPE_META[selectedTypes[0]].icon : "ac_unit"} className="text-5xl opacity-30" />
+              <div className="w-full h-full bg-surface-container-low flex items-center justify-center text-on-surface-variant">
+                <Icon name={selectedTypes[0] ? TYPE_META[selectedTypes[0]].icon : "ac_unit"} className="text-6xl opacity-30" />
               </div>
             )}
-            <div className="p-5">
-            <div className="flex justify-between text-[11px] uppercase tracking-wider font-label-md text-on-surface-variant">
-              <span>Fleet readiness</span><span className="text-tertiary">Live</span>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="bg-surface-container-low p-3 rounded-lg">
-                <span className="block text-xs text-on-surface-variant">Bookable units</span>
-                <strong className="font-headline-md text-xl">{assets.reduce((n, a) => n + a.quantity_available, 0)}</strong>
-              </div>
-              <div className="bg-surface-container-low p-3 rounded-lg">
-                <span className="block text-xs text-on-surface-variant">Rate engine</span>
-                <strong className="font-label-md text-on-surface">Ready</strong>
-              </div>
-            </div>
-
-            {selectedTypes.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-outline-variant space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase tracking-widest font-label-md text-on-surface-variant">Availability</span>
-                  <AvailBadge status={status} />
-                </div>
-                {selectedTypes.map((t) => {
-                  const avail = availByType[t];
-                  const cap = avail?.capacity ?? 0;
-                  const assetName = firstAssetOfType(t)?.name ?? t;
-                  return (
-                    <div key={t} className="space-y-1">
-                      <p className="text-[10px] text-on-surface-variant">{assetName}</p>
-                      <div className="flex items-end justify-between gap-1 h-5 bg-surface-container-low rounded-md px-1.5 py-1">
-                        {(avail?.days ?? placeholderDays.map((d) => ({ date: d, free: -1 }))).map((d) => {
-                          const known = d.free >= 0;
-                          const full = known && d.free <= 0;
-                          const h = !known ? 55 : cap ? Math.max(14, Math.round((d.free / cap) * 100)) : 55;
-                          return (
-                            <div
-                              key={d.date}
-                              title={known ? `${prettyDate(d.date)}: ${d.free} free` : prettyDate(d.date)}
-                              style={{ height: `${h}%` }}
-                              className={`w-full rounded-sm ${
-                                !known ? "bg-surface-container-high" : full ? "bg-error/50" : "bg-tertiary"
-                              }`}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="flex justify-between text-[9px] text-on-surface-variant font-label-md">
-                  <span>{prettyDate(start).toUpperCase()}</span>
-                  <span>{prettyDate(end).toUpperCase()}</span>
-                </div>
-              </div>
-            )}
-            </div>
           </div>
         </div>
       </section>
