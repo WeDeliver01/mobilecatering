@@ -187,6 +187,46 @@ export function BookingClient({
                 <strong className="font-label-md text-on-surface">Ready</strong>
               </div>
             </div>
+
+            {selectedTypes.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-outline-variant space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase tracking-widest font-label-md text-on-surface-variant">Availability</span>
+                  <AvailBadge status={status} />
+                </div>
+                {selectedTypes.map((t) => {
+                  const avail = availByType[t];
+                  const cap = avail?.capacity ?? 0;
+                  const assetName = firstAssetOfType(t)?.name ?? t;
+                  return (
+                    <div key={t} className="space-y-1">
+                      <p className="text-[10px] text-on-surface-variant">{assetName}</p>
+                      <div className="flex items-end justify-between gap-1 h-5 bg-surface-container-low rounded-md px-1.5 py-1">
+                        {(avail?.days ?? placeholderDays.map((d) => ({ date: d, free: -1 }))).map((d) => {
+                          const known = d.free >= 0;
+                          const full = known && d.free <= 0;
+                          const h = !known ? 55 : cap ? Math.max(14, Math.round((d.free / cap) * 100)) : 55;
+                          return (
+                            <div
+                              key={d.date}
+                              title={known ? `${prettyDate(d.date)}: ${d.free} free` : prettyDate(d.date)}
+                              style={{ height: `${h}%` }}
+                              className={`w-full rounded-sm ${
+                                !known ? "bg-surface-container-high" : full ? "bg-error/50" : "bg-tertiary"
+                              }`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between text-[9px] text-on-surface-variant font-label-md">
+                  <span>{prettyDate(start).toUpperCase()}</span>
+                  <span>{prettyDate(end).toUpperCase()}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -402,46 +442,6 @@ export function BookingClient({
                     <AvailBadge status={status} />
                   </div>
 
-                  {/* Capacity strips, one per selected unit */}
-                  {selectedTypes.length > 0 && (
-                    <div className="space-y-3">
-                      <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">
-                        Unit availability window
-                      </label>
-                      {selectedTypes.map((t) => {
-                        const avail = availByType[t];
-                        const cap = avail?.capacity ?? 0;
-                        const assetName = firstAssetOfType(t)?.name ?? t;
-                        return (
-                          <div key={t} className="space-y-1">
-                            <p className="text-[11px] text-on-surface-variant">{assetName}</p>
-                            <div className="flex items-end justify-between gap-1 h-8 bg-surface-container-low rounded-lg px-2 py-1">
-                              {(avail?.days ?? placeholderDays.map((d) => ({ date: d, free: -1 }))).map((d) => {
-                                const known = d.free >= 0;
-                                const full = known && d.free <= 0;
-                                const h = !known ? 55 : cap ? Math.max(14, Math.round((d.free / cap) * 100)) : 55;
-                                return (
-                                  <div
-                                    key={d.date}
-                                    title={known ? `${prettyDate(d.date)}: ${d.free} free` : prettyDate(d.date)}
-                                    style={{ height: `${h}%` }}
-                                    className={`w-full rounded-sm ${
-                                      !known ? "bg-surface-container-high" : full ? "bg-error/50" : "bg-tertiary"
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <div className="flex justify-between text-[10px] text-on-surface-variant font-label-md">
-                        <span>{prettyDate(start).toUpperCase()}</span>
-                        <span>{prettyDate(end).toUpperCase()}</span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Price breakdown */}
                   <div className="space-y-3 pt-2">
                     {selectedAssets.length === 0 && (
@@ -452,7 +452,7 @@ export function BookingClient({
                     ))}
                     {selectedAssets.length > 0 && (
                       <>
-                        <Line label="Delivery & setup" value={ZAR(price.delivery)} />
+                        <Line label="Delivery cost" value={ZAR(price.delivery)} />
                         {waiver && <Line label="Damage waiver" value={ZAR(price.waiver)} />}
                         <div className="border-t border-outline-variant pt-3 flex justify-between items-center">
                           <span className="font-headline-md text-headline-md">Total</span>
