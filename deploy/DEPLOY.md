@@ -42,14 +42,38 @@ Set at minimum:
 
 ```
 PGLITE_DIR=./data/pg
-PAYFAST_WEBHOOK_TOKEN=<a long random secret>
 ADMIN_PASSWORD=<a strong password for /admin>
 SESSION_SECRET=<a long random secret>
+NEXT_PUBLIC_SITE_URL=https://catering.operandis.co.za
 ```
 
-Generate secrets with `openssl rand -hex 32`. Put the `PAYFAST_WEBHOOK_TOKEN` value into your
-PayFast notification adapter's `x-webhook-token` header config. Without `ADMIN_PASSWORD` and
-`SESSION_SECRET` set, `/admin` refuses to serve anything (fails closed).
+Generate secrets with `openssl rand -hex 32`. Without `ADMIN_PASSWORD` and `SESSION_SECRET` set,
+`/admin` refuses to serve anything (fails closed). `NEXT_PUBLIC_SITE_URL` is used to build links
+in emails and payment gateway return/webhook URLs, so it must be the real public domain.
+
+Everything below is optional and the app degrades gracefully without it (manual EFT, with no
+email, still works end to end):
+
+```
+# Email (Brevo SMTP or any SMTP provider) — quotes/bookings/payments email both customer and admin
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=<your Brevo SMTP login>
+SMTP_PASSWORD=<your Brevo SMTP key>
+EMAIL_FROM=bookings@yourdomain.co.za
+
+# BobPay (primary payment gateway) — webhook: /api/payments/webhook/bobpay
+BOBPAY_API_KEY=<your BobPay API key or JWT>
+BOBPAY_ENV=production
+BOBPAY_WEBHOOK_SECRET=<your BobPay webhook secret>
+
+# Yoco (secondary payment gateway) — webhook: /api/payments/webhook/yoco
+YOCO_SECRET_KEY=<your Yoco secret key>
+YOCO_WEBHOOK_SECRET=<your Yoco webhook signing secret, starts "whsec_">
+```
+
+Manual EFT needs no env vars: bank details come from Admin > Settings > Business details, and an
+admin marks a payment paid by hand from Admin > Bookings once a transfer clears.
 
 ## 4. Seed the database (first run only)
 
