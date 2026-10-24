@@ -14,6 +14,9 @@ import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
 import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
 import { createBookingAction, createQuoteAction, convertQuoteAction, type BookingInput, type ConsentInput } from "@/app/actions";
 import { TermsConsentModal, type ConsentResult } from "@/components/booking/TermsConsentModal";
+import type { PaymentMethod } from "@/lib/payments";
+
+const PAYMENT_LABELS: Record<PaymentMethod, string> = { bobpay: "BobPay", yoco: "Yoco", eft: "Manual EFT (bank transfer)" };
 
 const TYPE_META: Record<AssetType, { icon: string }> = {
   fridge: { icon: "ac_unit" },
@@ -21,12 +24,12 @@ const TYPE_META: Record<AssetType, { icon: string }> = {
 };
 
 type Modal =
-  | { kind: "booking"; bookings: Booking[]; paymentReference: string }
+  | { kind: "booking"; bookings: Booking[]; paymentReference: string; paymentMethod: PaymentMethod; checkoutUrl: string | null }
   | { kind: "quote"; code: string; expires: string }
   | null;
 
 export function BookingClient({
-  assets, initialStart, initialEnd, minDate, pricing, termsTitle, termsBody,
+  assets, initialStart, initialEnd, minDate, pricing, termsTitle, termsBody, paymentMethods, bank,
 }: {
   assets: Asset[];
   initialStart: string;
@@ -35,6 +38,8 @@ export function BookingClient({
   pricing: PricingSettings;
   termsTitle: string;
   termsBody: string;
+  paymentMethods: { id: PaymentMethod; label: string }[];
+  bank: { bankName: string; bankAccountName: string; bankAccountNumber: string; bankBranchCode: string };
 }) {
   const types = useMemo(
     () => Array.from(new Set(assets.map((a) => a.type))) as AssetType[],
@@ -58,6 +63,7 @@ export function BookingClient({
   const [email, setEmail] = useState("");
   const [billingDifferent, setBillingDifferent] = useState(false);
   const [billingAddress, setBillingAddress] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(paymentMethods[0]?.id ?? "eft");
 
   const [availByType, setAvailByType] = useState<Record<string, AvailabilityResult | null>>({});
   const [modal, setModal] = useState<Modal>(null);
@@ -114,6 +120,7 @@ export function BookingClient({
     billingAddress: billingDifferent ? billingAddress : "",
     siteContact, eventType, customer: fullName,
     customerPhone: phone, customerWhatsapp: whatsapp, customerEmail: email,
+    paymentMethod,
   });
 
   const onSave = async () => {
@@ -135,11 +142,15 @@ export function BookingClient({
     setSubmitting(true); setError(null);
     const res = pendingAction.kind === "book"
       ? await createBookingAction({ ...payload(), consent })
-      : await convertQuoteAction(pendingAction.code, consent);
+      : await convertQuoteAction(pendingAction.code, consent, paymentMethod);
     setSubmitting(false);
     setPendingAction(null);
-    if (res.ok) setModal({ kind: "booking", bookings: res.bookings, paymentReference: res.paymentReference });
-    else setError(res.error);
+    if (res.ok) {
+      setModal({
+        kind: "booking", bookings: res.bookings, paymentReference: res.paymentReference,
+        paymentMethod: res.paymentMethod ?? paymentMethod, checkoutUrl: res.checkoutUrl ?? null,
+      });
+    } else setError(res.error);
   };
 
   const placeholderDays = occupiedDays(start, end);
@@ -451,6 +462,26 @@ export function BookingClient({
                     )}
                   </div>
 
+                  {paymentMethods.length > 1 && (
+                    <div className="space-y-2 pt-2">
+                      <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">
+                        Payment method
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {paymentMethods.map((m) => (
+                          <button
+                            key={m.id} type="button" onClick={() => setPaymentMethod(m.id)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-label-md border transition-all ${
+                              paymentMethod === m.id ? "bg-primary text-on-primary border-primary" : "border-outline text-on-surface-variant hover:border-on-surface-variant"
+                            }`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {error && (
                     <div className="bg-error-container text-on-error-container text-sm rounded-lg px-3 py-2 flex items-center gap-2">
                       <Icon name="error" className="text-[18px]" /> {error}
@@ -506,6 +537,7 @@ export function BookingClient({
             onClose={() => setModal(null)}
             onConvert={onConvert}
             submitting={submitting}
+            bank={bank}
           />
         )}
       </div>
@@ -574,12 +606,13 @@ function AvailBadge({ status }: { status: string | null }) {
 }
 
 function ResultModal({
-  modal, onClose, onConvert, submitting,
+  modal, onClose, onConvert, submitting, bank,
 }: {
   modal: Exclude<Modal, null>;
   onClose: () => void;
   onConvert: (code: string) => void;
   submitting: boolean;
+  bank: { bankName: string; bankAccountName: string; bankAccountNumber: string; bankBranchCode: string };
 }) {
   const isQuote = modal.kind === "quote";
   return (
@@ -605,6 +638,26 @@ function ResultModal({
             </p>
             {isQuote && <p className="text-[11px] text-on-surface-variant mt-1">Valid until {prettyDate(modal.expires)}</p>}
           </div>
+
+          {!isQuote && modal.paymentMethod === "eft" && (
+            <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-1 text-sm">
+              <p className="font-label-md text-on-surface mb-1">Pay by bank transfer</p>
+              {bank.bankName && <p><span className="text-on-surface-variant">Bank:</span> {bank.bankName}</p>}
+              {bank.bankAccountName && <p><span className="text-on-surface-variant">Account holder:</span> {bank.bankAccountName}</p>}
+              {bank.bankAccountNumber && <p><span className="text-on-surface-variant">Account number:</span> {bank.bankAccountNumber}</p>}
+              {bank.bankBranchCode && <p><span className="text-on-surface-variant">Branch code:</span> {bank.bankBranchCode}</p>}
+              <p className="text-on-surface-variant pt-1">Use <span className="font-code-sm text-on-surface">{modal.paymentReference}</span> as your payment reference.</p>
+            </div>
+          )}
+
+          {!isQuote && modal.checkoutUrl && (
+            <a
+              href={modal.checkoutUrl} target="_blank" rel="noreferrer"
+              className="block text-center bg-primary text-on-primary py-3 rounded-lg font-bold hover:opacity-90 active:scale-[0.99] transition-all"
+            >
+              Pay now
+            </a>
+          )}
 
           <div className="flex gap-2">
             {isQuote ? (

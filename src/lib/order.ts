@@ -1,4 +1,4 @@
-import type { Booking, Payment, BookingStatus } from "./types";
+import type { Booking, Payment, BookingStatus, PaymentStatus } from "./types";
 
 // Groups booking rows (one per hired item) back into orders for display.
 // Pure and isomorphic (no DB access) so both server actions and the admin
@@ -16,6 +16,9 @@ export interface Order {
   site_contact: string;
   created_at: string;
   total: number;
+  paymentReference: string | null;
+  paymentGateway: string | null;
+  paymentStatus: PaymentStatus | null;
 }
 
 export function orderKey(b: Pick<Booking, "id" | "order_id">): string {
@@ -39,7 +42,8 @@ export function groupOrders(bookings: Booking[], payments: Payment[]): Order[] {
 
   return Array.from(byOrder.entries()).map(([orderId, items]) => {
     const first = items[0];
-    const total = paymentByOrder.get(orderId)?.amount ?? items.reduce((s, b) => s + b.price_total, 0);
+    const payment = paymentByOrder.get(orderId);
+    const total = payment?.amount ?? items.reduce((s, b) => s + b.price_total, 0);
     return {
       orderId,
       bookings: items,
@@ -53,6 +57,9 @@ export function groupOrders(bookings: Booking[], payments: Payment[]): Order[] {
       site_contact: first.site_contact,
       created_at: first.created_at,
       total,
+      paymentReference: payment?.reference ?? null,
+      paymentGateway: payment?.gateway ?? null,
+      paymentStatus: payment?.status ?? null,
     };
   });
 }

@@ -14,6 +14,7 @@ import { setOrderStatusAction, updateAssetAction, addAssetAction } from "@/app/a
 import {
   updatePricingSettingsAction, updateSiteContentAction,
   uploadAssetImageAction, addGalleryImageAction, deleteGalleryImageAction, updateCompanySettingsAction,
+  markPaymentPaidAction,
 } from "@/app/admin/settings-actions";
 
 type Tab = "overview" | "bookings" | "assets" | "settings";
@@ -200,6 +201,14 @@ function Bookings({ assets, orders }: { assets: Asset[]; orders: Order[] }) {
   const setStatus = (orderId: string, status: BookingStatus) =>
     startTransition(async () => { await setOrderStatusAction(orderId, status); router.refresh(); });
 
+  const [markError, setMarkError] = useState<string | null>(null);
+  const markPaid = (reference: string) =>
+    startTransition(async () => {
+      const res = await markPaymentPaidAction(reference);
+      if (!res.ok) setMarkError(res.error);
+      else { setMarkError(null); router.refresh(); }
+    });
+
   const filters: ("all" | BookingStatus)[] = ["all", "pending", "confirmed", "cancelled"];
 
   return (
@@ -229,14 +238,15 @@ function Bookings({ assets, orders }: { assets: Asset[]; orders: Order[] }) {
           </div>
         </div>
       </div>
+      {markError && <p className="px-6 pt-3 text-sm text-error">{markError}</p>}
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
-            <tr><Th>Delivery</Th><Th>Customer</Th><Th>Units</Th><Th>Days</Th><Th>Total</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
+            <tr><Th>Delivery</Th><Th>Customer</Th><Th>Units</Th><Th>Days</Th><Th>Total</Th><Th>Payment</Th><Th>Status</Th><Th className="text-right">Action</Th></tr>
           </thead>
           <tbody className="divide-y divide-outline-variant/60">
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-6 py-10 text-center text-on-surface-variant font-body-md">No bookings match.</td></tr>
+              <tr><td colSpan={8} className="px-6 py-10 text-center text-on-surface-variant font-body-md">No bookings match.</td></tr>
             )}
             {rows.map((o) => (
               <tr key={o.orderId} className={pending ? "opacity-60" : ""}>
@@ -248,8 +258,15 @@ function Bookings({ assets, orders }: { assets: Asset[]; orders: Order[] }) {
                 <td className="px-6 py-4 font-body-md text-on-surface-variant">{unitsLabel(o)}</td>
                 <td className="px-6 py-4 font-body-md">{o.days}</td>
                 <td className="px-6 py-4 font-label-md">{ZAR(o.total)}</td>
+                <td className="px-6 py-4 font-body-md text-on-surface-variant">
+                  <span className="capitalize">{o.paymentGateway ?? "-"}</span>
+                  {o.paymentStatus && <span className="text-xs block capitalize">{o.paymentStatus}</span>}
+                </td>
                 <td className="px-6 py-4"><StatusPill status={o.status} /></td>
                 <td className="px-6 py-4 text-right whitespace-nowrap">
+                  {o.paymentGateway === "eft" && o.paymentStatus === "pending" && o.paymentReference && (
+                    <button onClick={() => markPaid(o.paymentReference as string)} className="text-tertiary font-label-md text-label-md hover:underline mr-3">Mark as paid</button>
+                  )}
                   {o.status === "pending" && (
                     <button onClick={() => setStatus(o.orderId, "confirmed")} className="text-tertiary font-label-md text-label-md hover:underline mr-3">Confirm</button>
                   )}

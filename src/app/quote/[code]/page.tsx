@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getQuoteByCode, expireOldQuotes, getSiteContent } from "@/db/repo";
+import { getQuoteByCode, expireOldQuotes, getSiteContent, getCompanySettings } from "@/db/repo";
+import { listAvailablePaymentMethods } from "@/lib/payments";
 import { QuoteView } from "@/components/booking/QuoteView";
 import { Icon } from "@/components/ui/Icon";
 
@@ -7,7 +8,9 @@ export const dynamic = "force-dynamic";
 
 export default async function QuotePage({ params }: { params: { code: string } }) {
   await expireOldQuotes();
-  const [quote, terms] = await Promise.all([getQuoteByCode(params.code), getSiteContent("terms")]);
+  const [quote, terms, company] = await Promise.all([
+    getQuoteByCode(params.code), getSiteContent("terms"), getCompanySettings(),
+  ]);
 
   if (!quote) {
     return (
@@ -30,5 +33,14 @@ export default async function QuotePage({ params }: { params: { code: string } }
     );
   }
 
-  return <QuoteView quote={quote} termsTitle={terms?.title || "Terms & Policies"} termsBody={terms?.body || ""} />;
+  return (
+    <QuoteView
+      quote={quote} termsTitle={terms?.title || "Terms & Policies"} termsBody={terms?.body || ""}
+      paymentMethods={listAvailablePaymentMethods()}
+      bank={{
+        bankName: company.bankName, bankAccountName: company.bankAccountName,
+        bankAccountNumber: company.bankAccountNumber, bankBranchCode: company.bankBranchCode,
+      }}
+    />
+  );
 }

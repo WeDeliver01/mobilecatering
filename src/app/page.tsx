@@ -1,14 +1,16 @@
-import { getAssets, getPricingSettings, getSiteContent } from "@/db/repo";
+import { getAssets, getPricingSettings, getSiteContent, getCompanySettings } from "@/db/repo";
+import { listAvailablePaymentMethods } from "@/lib/payments";
 import { BookingClient } from "@/components/booking/BookingClient";
 import { iso, today, addDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const [assets, pricing, terms] = await Promise.all([
+  const [assets, pricing, terms, company] = await Promise.all([
     getAssets().then((a) => a.filter((x) => x.active)),
     getPricingSettings(),
     getSiteContent("terms"),
+    getCompanySettings(),
   ]);
   const t = today();
   return (
@@ -20,6 +22,11 @@ export default async function Page() {
       minDate={iso(t)}
       termsTitle={terms?.title || "Terms & Policies"}
       termsBody={terms?.body || ""}
+      paymentMethods={listAvailablePaymentMethods()}
+      bank={{
+        bankName: company.bankName, bankAccountName: company.bankAccountName,
+        bankAccountNumber: company.bankAccountNumber, bankBranchCode: company.bankBranchCode,
+      }}
     />
   );
 }

@@ -12,7 +12,10 @@ import { depotDistanceTo, type RouteDistance } from "@/lib/geo";
 import { billedDays, iso, today, addDays } from "@/lib/dates";
 import { generateQuoteCode, uid } from "@/lib/quote";
 import { notifyQuoteCreated, notifyBookingRequested } from "@/lib/notifications/send";
+import { createCheckout, getProvider, type PaymentMethod } from "@/lib/payments";
 import type { AssetType, BookingStatus, Booking, QuoteSnapshot, OrderItem, ConsentMethod } from "@/lib/types";
+
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 
 export interface ConsentInput {
   method: ConsentMethod;
@@ -41,6 +44,7 @@ export interface BookingInput {
   // Required to actually book (createBookingAction enforces this); not
   // needed just to save a quote, which isn't a binding commitment yet.
   consent?: ConsentInput;
+  paymentMethod?: PaymentMethod;
 }
 
 async function resolveDelivery(
@@ -128,22 +132,39 @@ export async function createBookingAction(input: BookingInput) {
     return { ok: false as const, error: "Please sign to agree to the Terms & Policies." };
   }
 
+  const method = input.paymentMethod ?? "eft";
+  if (!getProvider(method).isEnabled()) {
+    return { ok: false as const, error: `${getProvider(method).label} is not available right now. Please choose another payment method.` };
+  }
+
   const settings = await getPricingSettings();
   const { dist, deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
   // A pending payment still holds capacity, preventing a checkout race. The
-  // payment webhook is the only path that promotes it to reserved.
+  // payment webhook (or, for manual EFT, an admin marking it paid) is the
+  // only path that promotes it to reserved.
   const order = await buildOrder(input, "pending", deliveryFee, zoneLabel, settings.waiverFee);
   if ("error" in order) return { ok: false as const, error: order.error };
 
-  await Promise.all(order.bookings.map((b) => insertBooking(b)));
-  const firstId = order.bookings[0].id;
   const reference = `MZ-${order.orderId.slice(0, 8).toUpperCase()}`;
   const customerName = order.bookings[0].customer;
   const customerEmail = order.bookings[0].customer_email;
+
+  // Ask the gateway for a checkout link before touching the DB, so a failed
+  // gateway call never leaves an orphaned pending booking behind.
+  const checkout = await createCheckout(method, {
+    orderId: order.orderId, reference, amount: order.total,
+    customerName, customerEmail, customerPhone: order.bookings[0].customer_phone,
+    description: `Mobile Catering order ${reference}`,
+    returnUrl: `${SITE_URL}/consent/${order.orderId}`,
+  });
+  if (!checkout.ok) return { ok: false as const, error: checkout.error };
+
+  const firstId = order.bookings[0].id;
+  await Promise.all(order.bookings.map((b) => insertBooking(b)));
   await Promise.all([
     insertPayment({
       id: uid(), order_id: order.orderId, booking_id: firstId, amount: order.total,
-      gateway: "payfast", reference, status: "pending", paid_at: null, created_at: new Date().toISOString(),
+      gateway: method, reference, status: "pending", paid_at: null, created_at: new Date().toISOString(),
     }),
     insertDelivery({
       id: uid(), order_id: order.orderId, booking_id: firstId,
@@ -171,7 +192,10 @@ export async function createBookingAction(input: BookingInput) {
     deliveryAddress: order.bookings[0].delivery_address, total: order.total,
   }).catch((e) => console.error("[notify] booking requested failed:", e));
 
-  return { ok: true as const, orderId: order.orderId, bookings: order.bookings, total: order.total, paymentReference: reference };
+  return {
+    ok: true as const, orderId: order.orderId, bookings: order.bookings, total: order.total,
+    paymentReference: reference, paymentMethod: method, checkoutUrl: checkout.checkoutUrl,
+  };
 }
 
 export async function createQuoteAction(input: BookingInput) {
@@ -236,7 +260,7 @@ export async function createQuoteAction(input: BookingInput) {
   return { ok: true as const, code, expires_at: expires };
 }
 
-export async function convertQuoteAction(code: string, consent: ConsentInput) {
+export async function convertQuoteAction(code: string, consent: ConsentInput, paymentMethod?: PaymentMethod) {
   const quote = await getQuoteByCode(code);
   if (!quote) return { ok: false as const, error: "Quote not found." };
   if (quote.status !== "active") return { ok: false as const, error: `Quote is ${quote.status}.` };
@@ -250,7 +274,7 @@ export async function convertQuoteAction(code: string, consent: ConsentInput) {
     addressLat: s.address_lat ?? undefined, addressLon: s.address_lon ?? undefined,
     siteContact: s.site_contact, eventType: s.event_type, customer: s.customer,
     customerPhone: s.customer_phone, customerWhatsapp: s.customer_whatsapp, customerEmail: s.customer_email,
-    consent,
+    consent, paymentMethod,
   });
   if (!result.ok) return result;
   await markQuoteConverted(quote.id, result.bookings[0].id);

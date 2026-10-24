@@ -9,6 +9,7 @@ import {
 } from "@/db/repo";
 import { uid } from "@/lib/quote";
 import type { CompanySettings } from "@/lib/company";
+import { fulfillPayment } from "@/lib/payments/fulfill";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -82,5 +83,14 @@ export async function updateCompanySettingsAction(patch: Partial<CompanySettings
   revalidatePath("/admin");
   revalidatePath("/");
   revalidatePath("/gallery");
+  return { ok: true as const };
+}
+
+// Manual EFT has no webhook, so an admin confirms the bank transfer landed
+// and this promotes the order exactly like a gateway webhook would.
+export async function markPaymentPaidAction(reference: string) {
+  const result = await fulfillPayment(reference);
+  if (!result.ok) return { ok: false as const, error: result.error };
+  revalidatePath("/admin");
   return { ok: true as const };
 }

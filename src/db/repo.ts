@@ -131,6 +131,12 @@ export async function getInvoiceByOrderId(orderOrBookingId: string): Promise<Inv
   return row ? toInvoice(row) : undefined;
 }
 
+export async function getPaymentByReference(reference: string): Promise<Payment | undefined> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.payments).where(eq(schema.payments.reference, reference)).limit(1);
+  return rows[0] ? toPayment(rows[0]) : undefined;
+}
+
 export async function getPaymentByOrderId(orderOrBookingId: string): Promise<Payment | undefined> {
   const db = await getDb();
   const rows = await db.select().from(schema.payments);
