@@ -109,6 +109,14 @@ export async function initSchema(): Promise<void> {
     id TEXT PRIMARY KEY, url TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '',
     sort_order INTEGER NOT NULL DEFAULT 0
   )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS consents (
+    id TEXT PRIMARY KEY, order_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL DEFAULT 'checkbox', signature_data_url TEXT,
+    terms_title TEXT NOT NULL DEFAULT '', terms_body TEXT NOT NULL DEFAULT '',
+    agreed_at TEXT NOT NULL
+  )`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_consents_order ON consents (order_id)`);
 }
 
 export async function ensureSeed(): Promise<void> {

@@ -133,6 +133,20 @@ export interface SiteContent {
   updated_at: string;
 }
 
+export type ConsentMethod = "checkbox" | "signature";
+
+export interface Consent {
+  id: string;
+  order_id: string;
+  customer_name: string;
+  customer_email: string;
+  method: ConsentMethod;
+  signature_data_url: string | null;
+  terms_title: string;
+  terms_body: string;
+  agreed_at: string;
+}
+
 export interface GalleryImage {
   id: string;
   url: string;

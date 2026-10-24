@@ -110,3 +110,18 @@ export const galleryImages = pgTable("gallery_images", {
   caption: text("caption").notNull().default(""),
   sort_order: integer("sort_order").notNull().default(0),
 });
+
+// One row per customer's Terms & Policies agreement at checkout. Stores a
+// full text snapshot (not just a version number) so what was agreed to is
+// provable even if the live Terms content is edited later.
+export const consents = pgTable("consents", {
+  id: text("id").primaryKey(),
+  order_id: text("order_id").notNull(),
+  customer_name: text("customer_name").notNull().default(""),
+  customer_email: text("customer_email").notNull().default(""),
+  method: text("method").notNull().default("checkbox"), // "checkbox" | "signature"
+  signature_data_url: text("signature_data_url"), // base64 PNG, when method = "signature"
+  terms_title: text("terms_title").notNull().default(""),
+  terms_body: text("terms_body").notNull().default(""),
+  agreed_at: text("agreed_at").notNull(),
+});

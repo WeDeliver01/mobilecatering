@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getQuoteByCode, expireOldQuotes } from "@/db/repo";
+import { getQuoteByCode, expireOldQuotes, getSiteContent } from "@/db/repo";
 import { QuoteView } from "@/components/booking/QuoteView";
 import { Icon } from "@/components/ui/Icon";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function QuotePage({ params }: { params: { code: string } }) {
   await expireOldQuotes();
-  const quote = await getQuoteByCode(params.code);
+  const [quote, terms] = await Promise.all([getQuoteByCode(params.code), getSiteContent("terms")]);
 
   if (!quote) {
     return (
@@ -30,5 +30,5 @@ export default async function QuotePage({ params }: { params: { code: string } }
     );
   }
 
-  return <QuoteView quote={quote} />;
+  return <QuoteView quote={quote} termsTitle={terms?.title || "Terms & Policies"} termsBody={terms?.body || ""} />;
 }

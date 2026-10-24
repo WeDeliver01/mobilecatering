@@ -4,6 +4,7 @@ import {
   insertInvoice, markPaymentPaid, setOrderStatus, getAssetById,
 } from "@/db/repo";
 import { uid } from "@/lib/quote";
+import { notifyPaymentConfirmed } from "@/lib/notifications/send";
 import type { InvoiceLineItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -49,11 +50,17 @@ export async function POST(req: NextRequest) {
     if (delivery) lines.push({ label: "Delivery & collection", amount: delivery.delivery_fee });
     if (waiverFee > 0) lines.push({ label: "Damage waiver", amount: waiverFee });
 
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${orderId.slice(0, 8).toUpperCase()}`;
     await insertInvoice({
       id: uid(), order_id: orderId, booking_id: booking.id,
-      invoice_number: `INV-${new Date().getFullYear()}-${orderId.slice(0, 8).toUpperCase()}`,
+      invoice_number: invoiceNumber,
       total: payment.amount, items: lines, issued_at: new Date().toISOString(),
     });
+
+    notifyPaymentConfirmed({
+      orderId, invoiceNumber, customer: booking.customer, customerEmail: booking.customer_email,
+      items: lines, total: payment.amount, bookingIdForInvoiceUrl: booking.id,
+    }).catch((e) => console.error("[notify] payment confirmed failed:", e));
   }
   return NextResponse.json({ ok: true, order_id: orderId });
 }

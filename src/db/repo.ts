@@ -3,9 +3,10 @@ import { getDb } from "./client";
 import * as schema from "./schema";
 import type {
   Asset, Booking, Quote, AssetType, BookingStatus, QuoteSnapshot, Payment, Invoice, Delivery,
-  PaymentStatus, DeliveryStatus, SiteContent, GalleryImage, InvoiceLineItem,
+  PaymentStatus, DeliveryStatus, SiteContent, GalleryImage, InvoiceLineItem, Consent, ConsentMethod,
 } from "@/lib/types";
 import { DEFAULT_PRICING, type PricingSettings } from "@/lib/pricing";
+import { DEFAULT_COMPANY, COMPANY_SETTINGS_KEYS, type CompanySettings } from "@/lib/company";
 
 type AssetRow = typeof schema.assets.$inferSelect;
 type BookingRow = typeof schema.bookings.$inferSelect;
@@ -291,6 +292,46 @@ export async function updatePricingSettings(patch: Partial<PricingSettings>): Pr
     await db.execute(sql`INSERT INTO settings (key, value) VALUES (${key}, ${String(value)})
       ON CONFLICT (key) DO UPDATE SET value = ${String(value)}`);
   }
+}
+
+/* ---------------- Company settings (business details, bank account) ---------------- */
+
+export async function getCompanySettings(): Promise<CompanySettings> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.settings);
+  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const out = { ...DEFAULT_COMPANY };
+  for (const k of Object.keys(COMPANY_SETTINGS_KEYS) as (keyof CompanySettings)[]) {
+    const dbKey = COMPANY_SETTINGS_KEYS[k];
+    if (map[dbKey] !== undefined) out[k] = map[dbKey];
+  }
+  return out;
+}
+
+export async function updateCompanySettings(patch: Partial<CompanySettings>): Promise<void> {
+  const db = await getDb();
+  for (const k of Object.keys(patch) as (keyof CompanySettings)[]) {
+    const value = patch[k];
+    if (value === undefined) continue;
+    const dbKey = COMPANY_SETTINGS_KEYS[k];
+    await db.execute(sql`INSERT INTO settings (key, value) VALUES (${dbKey}, ${value})
+      ON CONFLICT (key) DO UPDATE SET value = ${value}`);
+  }
+}
+
+/* ---------------- Consents (Terms & Policies agreement) ---------------- */
+
+export async function insertConsent(c: Consent): Promise<void> {
+  const db = await getDb();
+  await db.insert(schema.consents).values(c);
+}
+
+export async function getConsentByOrderId(orderOrBookingId: string): Promise<Consent | undefined> {
+  const db = await getDb();
+  const rows = await db.select().from(schema.consents).where(eq(schema.consents.order_id, orderOrBookingId)).limit(1);
+  const r = rows[0];
+  if (!r) return undefined;
+  return { ...r, method: r.method as ConsentMethod, signature_data_url: r.signature_data_url ?? null };
 }
 
 /* ---------------- Site content (About, Terms & Policies) ---------------- */

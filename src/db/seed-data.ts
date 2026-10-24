@@ -2,6 +2,7 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import * as schema from "./schema";
 import { iso, today, addDays, billedDays } from "@/lib/dates";
 import { computePrice, deliveryFeeForDistance, DEFAULT_PRICING } from "@/lib/pricing";
+import { DEFAULT_COMPANY, COMPANY_SETTINGS_KEYS } from "@/lib/company";
 
 type DB = PgliteDatabase<typeof schema>;
 
@@ -89,10 +90,15 @@ function seedBookings() {
 }
 
 export function seedSettings(): { key: string; value: string }[] {
+  const company = (Object.keys(COMPANY_SETTINGS_KEYS) as (keyof typeof COMPANY_SETTINGS_KEYS)[]).map((k) => ({
+    key: COMPANY_SETTINGS_KEYS[k],
+    value: DEFAULT_COMPANY[k],
+  }));
   return [
     { key: "delivery_base_fee", value: String(DEFAULT_PRICING.deliveryBaseFee) },
     { key: "delivery_rate_per_km", value: String(DEFAULT_PRICING.deliveryRatePerKm) },
     { key: "waiver_fee", value: String(DEFAULT_PRICING.waiverFee) },
+    ...company,
   ];
 }
 

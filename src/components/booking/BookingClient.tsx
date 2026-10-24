@@ -12,7 +12,8 @@ import { ZAR } from "@/lib/format";
 import { Icon } from "@/components/ui/Icon";
 import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
 import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
-import { createBookingAction, createQuoteAction, convertQuoteAction, type BookingInput } from "@/app/actions";
+import { createBookingAction, createQuoteAction, convertQuoteAction, type BookingInput, type ConsentInput } from "@/app/actions";
+import { TermsConsentModal, type ConsentResult } from "@/components/booking/TermsConsentModal";
 
 const TYPE_META: Record<AssetType, { icon: string }> = {
   fridge: { icon: "ac_unit" },
@@ -25,13 +26,15 @@ type Modal =
   | null;
 
 export function BookingClient({
-  assets, initialStart, initialEnd, minDate, pricing,
+  assets, initialStart, initialEnd, minDate, pricing, termsTitle, termsBody,
 }: {
   assets: Asset[];
   initialStart: string;
   initialEnd: string;
   minDate: string;
   pricing: PricingSettings;
+  termsTitle: string;
+  termsBody: string;
 }) {
   const types = useMemo(
     () => Array.from(new Set(assets.map((a) => a.type))) as AssetType[],
@@ -60,6 +63,7 @@ export function BookingClient({
   const [modal, setModal] = useState<Modal>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ kind: "book" } | { kind: "convert"; code: string } | null>(null);
 
   const selectedAssets = selectedTypes.map((t) => firstAssetOfType(t)).filter((a): a is Asset => !!a);
 
@@ -112,13 +116,6 @@ export function BookingClient({
     customerPhone: phone, customerWhatsapp: whatsapp, customerEmail: email,
   });
 
-  const onConfirm = async () => {
-    setSubmitting(true); setError(null);
-    const res = await createBookingAction(payload());
-    setSubmitting(false);
-    if (res.ok) setModal({ kind: "booking", bookings: res.bookings, paymentReference: res.paymentReference });
-    else setError(res.error);
-  };
   const onSave = async () => {
     setSubmitting(true); setError(null);
     const res = await createQuoteAction(payload());
@@ -126,10 +123,21 @@ export function BookingClient({
     if (res.ok) setModal({ kind: "quote", code: res.code, expires: res.expires_at });
     else setError(res.error);
   };
-  const onConvert = async (code: string) => {
+
+  // Both booking and quote-conversion require Terms agreement, so both just
+  // queue what to do and open the modal; the modal's onAgree runs it.
+  const onConfirm = () => setPendingAction({ kind: "book" });
+  const onConvert = (code: string) => setPendingAction({ kind: "convert", code });
+
+  const onAgreeAndContinue = async (consentResult: ConsentResult) => {
+    if (!pendingAction) return;
+    const consent: ConsentInput = { ...consentResult, termsTitle, termsBody };
     setSubmitting(true); setError(null);
-    const res = await convertQuoteAction(code);
+    const res = pendingAction.kind === "book"
+      ? await createBookingAction({ ...payload(), consent })
+      : await convertQuoteAction(pendingAction.code, consent);
     setSubmitting(false);
+    setPendingAction(null);
     if (res.ok) setModal({ kind: "booking", bookings: res.bookings, paymentReference: res.paymentReference });
     else setError(res.error);
   };
@@ -481,6 +489,16 @@ export function BookingClient({
             </aside>
           </div>
         </div>
+
+        {pendingAction && (
+          <TermsConsentModal
+            title={termsTitle}
+            body={termsBody}
+            onAgree={onAgreeAndContinue}
+            onCancel={() => setPendingAction(null)}
+            busy={submitting}
+          />
+        )}
 
         {modal && (
           <ResultModal

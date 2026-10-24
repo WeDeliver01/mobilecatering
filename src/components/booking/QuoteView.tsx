@@ -7,19 +7,23 @@ import { ZAR } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
 import { Icon } from "@/components/ui/Icon";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { convertQuoteAction } from "@/app/actions";
+import { convertQuoteAction, type ConsentInput } from "@/app/actions";
+import { TermsConsentModal, type ConsentResult } from "@/components/booking/TermsConsentModal";
 
-export function QuoteView({ quote }: { quote: Quote }) {
+export function QuoteView({ quote, termsTitle, termsBody }: { quote: Quote; termsTitle: string; termsBody: string }) {
   const s = quote.snapshot_json;
   const [status, setStatus] = useState(quote.status);
   const [bookingRef, setBookingRef] = useState<string | null>(quote.converted_booking_id);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
-  const convert = async () => {
+  const convert = async (consentResult: ConsentResult) => {
+    const consent: ConsentInput = { ...consentResult, termsTitle, termsBody };
     setBusy(true); setError(null);
-    const res = await convertQuoteAction(quote.quote_code);
+    const res = await convertQuoteAction(quote.quote_code, consent);
     setBusy(false);
+    setShowTerms(false);
     if (res.ok) { setStatus("converted"); setBookingRef(res.bookings[0].id); }
     else setError(res.error);
   };
@@ -68,11 +72,21 @@ export function QuoteView({ quote }: { quote: Quote }) {
 
           {status === "active" && (
             <button
-              onClick={convert} disabled={busy}
+              onClick={() => setShowTerms(true)} disabled={busy}
               className="w-full bg-primary text-on-primary py-4 rounded-lg font-bold text-lg hover:opacity-90 transition-all active:scale-[0.99] disabled:opacity-40"
             >
               {busy ? "Working..." : "Convert to booking"}
             </button>
+          )}
+
+          {showTerms && (
+            <TermsConsentModal
+              title={termsTitle}
+              body={termsBody}
+              onAgree={convert}
+              onCancel={() => setShowTerms(false)}
+              busy={busy}
+            />
           )}
 
           {status === "converted" && (

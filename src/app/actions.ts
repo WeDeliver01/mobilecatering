@@ -4,14 +4,22 @@ import { revalidatePath } from "next/cache";
 import {
   getAssets, getBookings, getAssetById, insertBooking, insertQuote,
   getQuoteByCode, markQuoteConverted, updateAsset, setOrderStatus, addAsset,
-  insertPayment, insertDelivery, getPricingSettings,
+  insertPayment, insertDelivery, insertConsent, getPricingSettings,
 } from "@/db/repo";
 import { windowAvailability } from "@/lib/availability";
 import { computePrice, deliveryFeeForDistance, type PricingSettings } from "@/lib/pricing";
 import { depotDistanceTo, type RouteDistance } from "@/lib/geo";
 import { billedDays, iso, today, addDays } from "@/lib/dates";
 import { generateQuoteCode, uid } from "@/lib/quote";
-import type { AssetType, BookingStatus, Booking, QuoteSnapshot, OrderItem } from "@/lib/types";
+import { notifyQuoteCreated, notifyBookingRequested } from "@/lib/notifications/send";
+import type { AssetType, BookingStatus, Booking, QuoteSnapshot, OrderItem, ConsentMethod } from "@/lib/types";
+
+export interface ConsentInput {
+  method: ConsentMethod;
+  signatureDataUrl?: string;
+  termsTitle: string;
+  termsBody: string;
+}
 
 export interface BookingInput {
   items: { assetType: AssetType; assetId: string }[];
@@ -30,6 +38,9 @@ export interface BookingInput {
   customerPhone: string;
   customerWhatsapp: boolean;
   customerEmail: string;
+  // Required to actually book (createBookingAction enforces this); not
+  // needed just to save a quote, which isn't a binding commitment yet.
+  consent?: ConsentInput;
 }
 
 async function resolveDelivery(
@@ -109,16 +120,26 @@ async function buildOrder(
 }
 
 export async function createBookingAction(input: BookingInput) {
+  const consent = input.consent;
+  if (!consent || !consent.termsBody.trim()) {
+    return { ok: false as const, error: "You must agree to the Terms & Policies to continue." };
+  }
+  if (consent.method === "signature" && !consent.signatureDataUrl) {
+    return { ok: false as const, error: "Please sign to agree to the Terms & Policies." };
+  }
+
   const settings = await getPricingSettings();
   const { dist, deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
   // A pending payment still holds capacity, preventing a checkout race. The
-  // PayFast webhook is the only path that promotes it to reserved.
+  // payment webhook is the only path that promotes it to reserved.
   const order = await buildOrder(input, "pending", deliveryFee, zoneLabel, settings.waiverFee);
   if ("error" in order) return { ok: false as const, error: order.error };
 
   await Promise.all(order.bookings.map((b) => insertBooking(b)));
   const firstId = order.bookings[0].id;
   const reference = `MZ-${order.orderId.slice(0, 8).toUpperCase()}`;
+  const customerName = order.bookings[0].customer;
+  const customerEmail = order.bookings[0].customer_email;
   await Promise.all([
     insertPayment({
       id: uid(), order_id: order.orderId, booking_id: firstId, amount: order.total,
@@ -132,9 +153,24 @@ export async function createBookingAction(input: BookingInput) {
       duration_minutes: dist ? dist.durationMinutes : null,
       delivery_fee: deliveryFee, status: "scheduled",
     }),
+    insertConsent({
+      id: uid(), order_id: order.orderId, customer_name: customerName, customer_email: customerEmail,
+      method: consent.method, signature_data_url: consent.signatureDataUrl ?? null,
+      terms_title: consent.termsTitle, terms_body: consent.termsBody, agreed_at: new Date().toISOString(),
+    }),
   ]);
   revalidatePath("/");
   revalidatePath("/admin");
+
+  notifyBookingRequested({
+    orderId: order.orderId, paymentReference: reference, customer: customerName, customerEmail,
+    items: order.bookings.map((b) => ({
+      assetName: b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet",
+    })),
+    startDate: order.bookings[0].start_date, endDate: order.bookings[0].end_date,
+    deliveryAddress: order.bookings[0].delivery_address, total: order.total,
+  }).catch((e) => console.error("[notify] booking requested failed:", e));
+
   return { ok: true as const, orderId: order.orderId, bookings: order.bookings, total: order.total, paymentReference: reference };
 }
 
@@ -191,10 +227,16 @@ export async function createQuoteAction(input: BookingInput) {
     created_at: new Date().toISOString(),
   });
   revalidatePath("/admin");
+
+  notifyQuoteCreated({
+    code, expiresAt: expires, customer: snapshot.customer, customerEmail: snapshot.customer_email,
+    items, days, startDate: input.start, endDate: input.end, priceTotal: total,
+  }).catch((e) => console.error("[notify] quote created failed:", e));
+
   return { ok: true as const, code, expires_at: expires };
 }
 
-export async function convertQuoteAction(code: string) {
+export async function convertQuoteAction(code: string, consent: ConsentInput) {
   const quote = await getQuoteByCode(code);
   if (!quote) return { ok: false as const, error: "Quote not found." };
   if (quote.status !== "active") return { ok: false as const, error: `Quote is ${quote.status}.` };
@@ -208,6 +250,7 @@ export async function convertQuoteAction(code: string) {
     addressLat: s.address_lat ?? undefined, addressLon: s.address_lon ?? undefined,
     siteContact: s.site_contact, eventType: s.event_type, customer: s.customer,
     customerPhone: s.customer_phone, customerWhatsapp: s.customer_whatsapp, customerEmail: s.customer_email,
+    consent,
   });
   if (!result.ok) return result;
   await markQuoteConverted(quote.id, result.bookings[0].id);
