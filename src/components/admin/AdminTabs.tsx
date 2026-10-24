@@ -16,9 +16,19 @@ import {
   uploadAssetImageAction, addGalleryImageAction, deleteGalleryImageAction, updateCompanySettingsAction,
   markPaymentPaidAction,
 } from "@/app/admin/settings-actions";
+import { ASSET_TYPES, ASSET_TYPE_META, assetTypeLabel } from "@/lib/assetTypes";
 
 type Tab = "overview" | "bookings" | "assets" | "settings";
-const TYPE_ICON: Record<AssetType, string> = { fridge: "ac_unit", toilet: "wc" };
+
+// Cycled by position so every asset type gets a distinct color without
+// hardcoding one per type; the app only has a few color tokens to work with.
+const TYPE_COLORS = [
+  { bg: "bg-primary", text: "text-primary", chip: "bg-primary-container/20 text-primary" },
+  { bg: "bg-secondary", text: "text-secondary", chip: "bg-secondary-container/20 text-secondary" },
+  { bg: "bg-tertiary", text: "text-tertiary", chip: "bg-tertiary-container/20 text-tertiary" },
+  { bg: "bg-error", text: "text-error", chip: "bg-error-container/20 text-error" },
+];
+const typeColor = (t: AssetType) => TYPE_COLORS[ASSET_TYPES.indexOf(t) % TYPE_COLORS.length];
 
 export function AdminTabs({
   assets, bookings, payments, quotes, todayIso, pricing, siteContent, galleryImages, company, geoapifyBudget,
@@ -83,7 +93,10 @@ function Overview({
     : null;
   const geoPct = geoapifyBudget.limit ? Math.round((geoapifyBudget.used / geoapifyBudget.limit) * 100) : 0;
 
-  const unitsLabel = (o: Order) => o.bookings.map((b) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet")).join(", ");
+  const unitsLabel = (o: Order) => o.bookings.map((b) => {
+    const name = assets.find((a) => a.id === b.asset_id)?.name ?? assetTypeLabel(b.asset_type);
+    return b.quantity > 1 ? `${name} x${b.quantity}` : name;
+  }).join(", ");
 
   return (
     <div>
@@ -133,7 +146,7 @@ function Overview({
                   <tr key={o.orderId}>
                     <td className="px-6 py-4">
                       <div className="font-label-md text-on-surface flex items-center gap-2">
-                        <Icon name={TYPE_ICON[o.bookings[0].asset_type]} className="text-[18px] text-on-surface-variant" />{unitsLabel(o)}
+                        <Icon name={ASSET_TYPE_META[o.bookings[0].asset_type].icon} className="text-[18px] text-on-surface-variant" />{unitsLabel(o)}
                       </div>
                       <div className="font-code-sm text-on-surface-variant text-xs">#{o.orderId.slice(0, 8).toUpperCase()}</div>
                     </td>
@@ -151,19 +164,18 @@ function Overview({
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md flex flex-col gap-gutter">
           <h2 className="font-headline-md text-headline-md">Fleet Utilisation</h2>
           <div className="space-y-stack-md">
-            {(["fridge", "toilet"] as AssetType[]).map((t) => {
+            {ASSET_TYPES.filter((t) => assets.some((a) => a.type === t)).map((t) => {
               const cap = assets.filter((a) => a.type === t && a.active).reduce((s, a) => s + a.quantity_available, 0);
-              const onHire = orders.filter(
-                (o) => o.status === "confirmed" && o.start_date <= todayIso && o.end_date >= todayIso && o.bookings.some((b) => b.asset_type === t)
-              ).length;
+              const onHire = orders
+                .filter((o) => o.status === "confirmed" && o.start_date <= todayIso && o.end_date >= todayIso)
+                .reduce((s, o) => s + o.bookings.filter((b) => b.asset_type === t).reduce((sum, b) => sum + b.quantity, 0), 0);
               const pct = cap ? Math.min(100, Math.round((onHire / cap) * 100)) : 0;
               const avail = Math.max(0, cap - onHire);
-              const color = t === "fridge" ? "bg-primary" : "bg-tertiary";
-              const txt = t === "fridge" ? "text-primary" : "text-tertiary";
+              const { bg: color, text: txt } = typeColor(t);
               return (
                 <div key={t}>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="font-label-md text-label-md capitalize">{t === "fridge" ? "Mobile Fridge" : "Double Toilet"}</span>
+                    <span className="font-label-md text-label-md">{assetTypeLabel(t)}</span>
                     <span className={`font-label-md text-label-md ${txt}`}>{pct}%</span>
                   </div>
                   <div className="h-4 w-full bg-surface-container-high rounded-full overflow-hidden">
@@ -208,7 +220,10 @@ function Bookings({ assets, orders }: { assets: Asset[]; orders: Order[] }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | BookingStatus>("all");
 
-  const unitsLabel = (o: Order) => o.bookings.map((b) => assets.find((a) => a.id === b.asset_id)?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet")).join(", ");
+  const unitsLabel = (o: Order) => o.bookings.map((b) => {
+    const name = assets.find((a) => a.id === b.asset_id)?.name ?? assetTypeLabel(b.asset_type);
+    return b.quantity > 1 ? `${name} x${b.quantity}` : name;
+  }).join(", ");
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -330,9 +345,15 @@ function Assets({ assets }: { assets: Asset[] }) {
         </div>
         <h3 className="font-headline-md text-headline-md text-on-surface-variant">Add Asset</h3>
         <p className="font-body-md text-on-surface-variant text-sm max-w-[220px]">Add another unit and set its daily rate.</p>
-        <div className="flex gap-2">
-          <button onClick={() => add("fridge")} disabled={pending} className="px-3 py-1.5 border-2 border-primary text-primary rounded-lg font-label-md text-label-md hover:bg-primary hover:text-white transition-all disabled:opacity-40">+ Fridge</button>
-          <button onClick={() => add("toilet")} disabled={pending} className="px-3 py-1.5 border-2 border-primary text-primary rounded-lg font-label-md text-label-md hover:bg-primary hover:text-white transition-all disabled:opacity-40">+ Toilet</button>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {ASSET_TYPES.map((t) => (
+            <button
+              key={t} onClick={() => add(t)} disabled={pending}
+              className="px-3 py-1.5 border-2 border-primary text-primary rounded-lg font-label-md text-label-md hover:bg-primary hover:text-white transition-all disabled:opacity-40"
+            >
+              + {assetTypeLabel(t)}
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -359,7 +380,7 @@ function AssetCard({
       onSaved();
     });
 
-  const chip = asset.type === "fridge" ? "bg-primary-container/20 text-primary" : "bg-secondary-container/20 text-secondary";
+  const chip = typeColor(asset.type).chip;
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -384,7 +405,7 @@ function AssetCard({
         {asset.image_url ? (
           <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" />
         ) : (
-          <Icon name={TYPE_ICON[asset.type]} className="text-4xl text-on-surface-variant" />
+          <Icon name={ASSET_TYPE_META[asset.type].icon} className="text-4xl text-on-surface-variant" />
         )}
       </div>
       <label className="text-xs font-label-md text-primary hover:underline cursor-pointer mb-stack-md self-start">
@@ -398,7 +419,7 @@ function AssetCard({
 
       <div className="flex justify-between items-start mb-stack-md">
         <div className={`w-12 h-12 ${chip} rounded-lg flex items-center justify-center`}>
-          <Icon name={TYPE_ICON[asset.type]} className="text-3xl" />
+          <Icon name={ASSET_TYPE_META[asset.type].icon} className="text-3xl" />
         </div>
         <div className="flex flex-col items-end">
           <span className="font-code-sm text-xs text-on-surface-variant">{asset.category_code}</span>

@@ -19,7 +19,7 @@ export default async function InvoicePage({ params }: { params: { bookingId: str
               <span className="w-[30px] h-[30px] rounded-lg bg-primary text-on-primary grid place-items-center text-sm font-extrabold">M</span>
               {company.tradingName.toUpperCase()}
             </div>
-            <p className="text-sm text-on-surface-variant">Mobile fridge &amp; toilet hire</p>
+            <p className="text-sm text-on-surface-variant">Mobile catering equipment hire</p>
             <p className="text-xs text-on-surface-variant">
               {company.legalName}{company.legalName !== company.tradingName ? `, trading as ${company.tradingName}` : ""}
             </p>

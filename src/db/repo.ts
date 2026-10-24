@@ -38,6 +38,7 @@ const toBooking = (r: BookingRow): Booking => ({
   delivery_time: r.delivery_time,
   collection_time: r.collection_time,
   days: r.days,
+  quantity: r.quantity,
   status: r.status as BookingStatus,
   price_total: r.price_total,
   delivery_address: r.delivery_address,

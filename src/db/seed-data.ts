@@ -3,33 +3,78 @@ import * as schema from "./schema";
 import { iso, today, addDays, billedDays } from "@/lib/dates";
 import { computePrice, deliveryFeeForDistance, DEFAULT_PRICING } from "@/lib/pricing";
 import { DEFAULT_COMPANY, COMPANY_SETTINGS_KEYS } from "@/lib/company";
+import { ASSET_TYPE_META } from "@/lib/assetTypes";
 
 type DB = PgliteDatabase<typeof schema>;
 
-// The real fleet: one mobile fridge, one double toilet.
+// The real fleet.
 function seedAssets() {
   return [
     {
       id: "asset-fridge",
-      name: "Mobile Fridge",
+      name: ASSET_TYPE_META.fridge.label,
       type: "fridge",
-      category_code: "CAT-FR-01",
+      category_code: `${ASSET_TYPE_META.fridge.categoryPrefix}-01`,
       description: "Dual-compartment cooling for catering and beverages.",
       quantity_available: 1,
-      daily_rate: 1250,
+      daily_rate: ASSET_TYPE_META.fridge.defaultRate,
       active: true,
-      image_url: null,
+      image_url: "/images/mobile-fridge-trailer.webp",
     },
     {
       id: "asset-toilet",
       name: "Double Toilet (men & women)",
       type: "toilet",
-      category_code: "CAT-TL-05",
+      category_code: `${ASSET_TYPE_META.toilet.categoryPrefix}-05`,
       description: "Two-side portable sanitation with interior lighting and sinks.",
       quantity_available: 1,
-      daily_rate: 950,
+      daily_rate: ASSET_TYPE_META.toilet.defaultRate,
       active: true,
       image_url: "/images/double-toilet-trailer.jpg",
+    },
+    {
+      id: "asset-food-warmer",
+      name: ASSET_TYPE_META.food_warmer.label,
+      type: "food_warmer",
+      category_code: `${ASSET_TYPE_META.food_warmer.categoryPrefix}-01`,
+      description: "Keeps prepared food service-ready for the duration of your event.",
+      quantity_available: 1,
+      daily_rate: ASSET_TYPE_META.food_warmer.defaultRate,
+      active: true,
+      image_url: null,
+    },
+    {
+      id: "asset-mobile-kitchen",
+      name: ASSET_TYPE_META.mobile_kitchen.label,
+      type: "mobile_kitchen",
+      category_code: `${ASSET_TYPE_META.mobile_kitchen.categoryPrefix}-01`,
+      description: "Fully equipped mobile kitchen trailer for on-site food prep.",
+      quantity_available: 1,
+      daily_rate: ASSET_TYPE_META.mobile_kitchen.defaultRate,
+      active: true,
+      image_url: null,
+    },
+    {
+      id: "asset-marquee-tent",
+      name: ASSET_TYPE_META.marquee_tent.label,
+      type: "marquee_tent",
+      category_code: `${ASSET_TYPE_META.marquee_tent.categoryPrefix}-01`,
+      description: "10m x 5m marquee tent, ideal cover for mid-size events.",
+      quantity_available: 1,
+      daily_rate: ASSET_TYPE_META.marquee_tent.defaultRate,
+      active: true,
+      image_url: "/images/marquee-tent.webp",
+    },
+    {
+      id: "asset-chairs",
+      name: ASSET_TYPE_META.chairs.label,
+      type: "chairs",
+      category_code: `${ASSET_TYPE_META.chairs.categoryPrefix}-01`,
+      description: "Event seating, priced and booked per chair.",
+      quantity_available: ASSET_TYPE_META.chairs.defaultQuantityAvailable,
+      daily_rate: ASSET_TYPE_META.chairs.defaultRate,
+      active: true,
+      image_url: null,
     },
   ];
 }
@@ -66,6 +111,7 @@ function seedBookings() {
       delivery_time: "09:00",
       collection_time: "17:00",
       days,
+      quantity: 1,
       status,
       price_total: price.total,
       delivery_address: address,
@@ -109,8 +155,9 @@ export function seedSiteContent(): { slug: string; title: string; body: string; 
       slug: "about",
       title: "About Mobile Catering",
       body:
-        "Mobile Catering (MOSSANNAH) hires out mobile fridge trailers and portable toilet trailers for events " +
-        "across Gauteng. We deliver, set up and collect, so you can focus on the event, not the logistics.\n\n" +
+        "Mobile Catering (MOSSANNAH) hires out mobile fridges, portable toilets, food warmers, mobile kitchens, " +
+        "marquee tents and chairs for events across Gauteng. We deliver, set up and collect, so you can focus " +
+        "on the event, not the logistics.\n\n" +
         "Edit this text any time from Admin > Settings > Content.",
       updated_at: now,
     },

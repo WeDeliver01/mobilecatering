@@ -6,7 +6,7 @@ import { getCompanySettings } from "@/db/repo";
 
 export const metadata: Metadata = {
   title: "Mobile Catering | Event Logistics Booking",
-  description: "Mobile fridge and toilet hire across Gauteng.",
+  description: "Mobile catering equipment hire across Gauteng: fridges, toilets, food warmers, mobile kitchens, marquee tents and chairs.",
 };
 
 // The layout now reads company settings from the embedded DB (for the

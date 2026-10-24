@@ -67,6 +67,7 @@ export async function initSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone TEXT NOT NULL DEFAULT ''`);
   await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_whatsapp BOOLEAN NOT NULL DEFAULT FALSE`);
   await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_email TEXT NOT NULL DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS quotes (
     id TEXT PRIMARY KEY,
     quote_code TEXT NOT NULL UNIQUE,

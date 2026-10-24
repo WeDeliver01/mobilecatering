@@ -4,6 +4,7 @@ import {
 } from "@/db/repo";
 import { uid } from "@/lib/quote";
 import { notifyPaymentConfirmed } from "@/lib/notifications/send";
+import { assetTypeLabel } from "@/lib/assetTypes";
 import type { InvoiceLineItem } from "@/lib/types";
 
 // Shared by every payment confirmation path (gateway webhooks, and the
@@ -40,8 +41,9 @@ export async function fulfillPayment(reference: string, expectedAmount?: number)
     const lines: InvoiceLineItem[] = [];
     for (const b of items) {
       const asset = b.asset_id ? await getAssetById(b.asset_id) : undefined;
-      const label = asset?.name ?? (b.asset_type === "fridge" ? "Mobile Fridge hire" : "Double Toilet hire");
-      lines.push({ label: `${label} (${b.days} day${b.days === 1 ? "" : "s"})`, amount: b.price_total });
+      const label = asset?.name ?? `${assetTypeLabel(b.asset_type)} hire`;
+      const qty = b.quantity > 1 ? ` x${b.quantity}` : "";
+      lines.push({ label: `${label}${qty} (${b.days} day${b.days === 1 ? "" : "s"})`, amount: b.price_total });
     }
     if (delivery) lines.push({ label: "Delivery & collection", amount: delivery.delivery_fee });
     if (waiverFee > 0) lines.push({ label: "Damage waiver", amount: waiverFee });

@@ -15,13 +15,7 @@ import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
 import { createBookingAction, createQuoteAction, convertQuoteAction, type BookingInput, type ConsentInput } from "@/app/actions";
 import { TermsConsentModal, type ConsentResult } from "@/components/booking/TermsConsentModal";
 import type { PaymentMethod } from "@/lib/payments";
-
-const PAYMENT_LABELS: Record<PaymentMethod, string> = { bobpay: "BobPay", yoco: "Yoco", eft: "Manual EFT (bank transfer)" };
-
-const TYPE_META: Record<AssetType, { icon: string }> = {
-  fridge: { icon: "ac_unit" },
-  toilet: { icon: "wc" },
-};
+import { ASSET_TYPE_META, isQuantityCapable } from "@/lib/assetTypes";
 
 type Modal =
   | { kind: "booking"; bookings: Booking[]; paymentReference: string; paymentMethod: PaymentMethod; checkoutUrl: string | null }
@@ -48,6 +42,7 @@ export function BookingClient({
   const firstAssetOfType = (t: AssetType) => assets.find((a) => a.type === t);
 
   const [selectedTypes, setSelectedTypes] = useState<AssetType[]>(types[0] ? [types[0]] : []);
+  const [quantities, setQuantities] = useState<Partial<Record<AssetType, number>>>({});
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
   const [deliveryTime, setDeliveryTime] = useState("09:00");
@@ -75,7 +70,16 @@ export function BookingClient({
 
   const toggleType = (t: AssetType) => {
     setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+    if (isQuantityCapable(t)) {
+      setQuantities((prev) => (prev[t] != null ? prev : { ...prev, [t]: 1 }));
+    }
   };
+
+  const setQuantity = (t: AssetType, qty: number) => {
+    setQuantities((prev) => ({ ...prev, [t]: Math.max(1, Math.floor(qty) || 1) }));
+  };
+
+  const quantityFor = (t: AssetType) => (isQuantityCapable(t) ? quantities[t] ?? 1 : 1);
 
   useEffect(() => {
     let cancel = false;
@@ -103,7 +107,7 @@ export function BookingClient({
     ? haversineKm(DEPOT.lat, DEPOT.lon, addressCoords.lat, addressCoords.lon) * 1.3
     : null;
   const deliveryFee = estimatedDistanceKm != null ? deliveryFeeForDistance(estimatedDistanceKm, pricing) : pricing.deliveryBaseFee;
-  const base = selectedAssets.reduce((s, a) => s + a.daily_rate * days, 0);
+  const base = selectedAssets.reduce((s, a) => s + a.daily_rate * days * quantityFor(a.type), 0);
   const price = computePrice({ asset: { daily_rate: base }, days: 1, deliveryFee, waiver, waiverFee: pricing.waiverFee });
 
   const statuses = selectedTypes.map((t) => availByType[t]?.status).filter((s): s is AvailabilityVerdict => !!s);
@@ -114,7 +118,7 @@ export function BookingClient({
     : statuses.includes("unavailable") ? "unavailable" : statuses.includes("limited") ? "limited" : "available";
 
   const payload = (): BookingInput => ({
-    items: selectedAssets.map((a) => ({ assetType: a.type, assetId: a.id })),
+    items: selectedAssets.map((a) => ({ assetType: a.type, assetId: a.id, quantity: quantityFor(a.type) })),
     start, end, deliveryTime, collectionTime, waiver, address,
     addressLat: addressCoords?.lat, addressLon: addressCoords?.lon,
     billingAddress: billingDifferent ? billingAddress : "",
@@ -166,10 +170,10 @@ export function BookingClient({
         <div className="max-w-7xl mx-auto px-container-padding py-14 md:py-20 grid lg:grid-cols-12 gap-10 items-end">
           <div className="lg:col-span-8 flex flex-col gap-5">
             <h1 className="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface max-w-2xl">
-              Mobile fridges &amp; toilets, delivered anywhere in Gauteng.
+              Mobile catering equipment, delivered anywhere in Gauteng.
             </h1>
             <p className="max-w-xl font-body-lg text-on-surface-variant">
-              Pick a unit, choose your dates, and we deliver, set up and collect, fixed pricing, no surprises on the day.
+              Fridges, toilets, food warmers, mobile kitchens, marquee tents and chairs. Pick what you need, choose your dates, and we deliver, set up and collect, fixed pricing, no surprises on the day.
             </p>
             <div className="flex flex-wrap gap-5 text-sm text-on-surface-variant font-medium">
               <Check label="Delivery & collection included" />
@@ -183,7 +187,7 @@ export function BookingClient({
               <img src={heroImage.url} alt={heroImage.alt} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-surface-container-low flex items-center justify-center text-on-surface-variant">
-                <Icon name={selectedTypes[0] ? TYPE_META[selectedTypes[0]].icon : "ac_unit"} className="text-6xl opacity-30" />
+                <Icon name={selectedTypes[0] ? ASSET_TYPE_META[selectedTypes[0]].icon : "festival"} className="text-6xl opacity-30" />
               </div>
             )}
           </div>
@@ -209,15 +213,20 @@ export function BookingClient({
                 {types.map((t) => {
                   const a = firstAssetOfType(t);
                   if (!a) return null;
-                  const m = TYPE_META[t];
+                  const m = ASSET_TYPE_META[t];
                   const on = selectedTypes.includes(t);
+                  const quantityCapable = isQuantityCapable(t);
                   return (
-                    <button
+                    // A real <button> can't contain the quantity <input> below (invalid
+                    // HTML, flaky focus), so this tile is a div acting as a button.
+                    <div
                       key={t}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => toggleType(t)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleType(t); } }}
                       aria-pressed={on}
-                      className={`text-left bg-surface-container-lowest rounded-xl p-5 border-2 transition-all relative ${
+                      className={`text-left bg-surface-container-lowest rounded-xl p-5 border-2 transition-all relative cursor-pointer ${
                         on ? "active-tile" : "border-outline-variant hover:border-on-surface-variant"
                       }`}
                     >
@@ -244,9 +253,25 @@ export function BookingClient({
                       <p className="text-on-surface-variant font-body-md text-sm mb-4">{a.description}</p>
                       <span className="font-headline-lg text-xl text-on-surface">
                         {ZAR(a.daily_rate)}
-                        <span className="text-sm font-body-md text-on-surface-variant"> / day</span>
+                        <span className="text-sm font-body-md text-on-surface-variant"> / {quantityCapable ? "chair / day" : "day"}</span>
                       </span>
-                    </button>
+                      {quantityCapable && on && (
+                        <div
+                          className="mt-4 pt-4 border-t border-outline-variant flex items-center justify-between gap-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <label className="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">
+                            How many?
+                          </label>
+                          <input
+                            type="number" min={1} max={a.quantity_available}
+                            value={quantityFor(t)}
+                            onChange={(e) => setQuantity(t, Number(e.target.value))}
+                            className="w-20 text-right px-2 py-1.5 rounded-lg border border-outline bg-surface focus:ring-1 focus:ring-primary focus:border-primary font-body-md"
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -406,9 +431,17 @@ export function BookingClient({
                     {selectedAssets.length === 0 && (
                       <p className="text-sm text-on-surface-variant">Choose at least one unit to see pricing.</p>
                     )}
-                    {selectedAssets.map((a) => (
-                      <Line key={a.id} label={`${a.name} (${days} day${days > 1 ? "s" : ""})`} value={ZAR(a.daily_rate * days)} />
-                    ))}
+                    {selectedAssets.map((a) => {
+                      const qty = quantityFor(a.type);
+                      const qtyLabel = qty > 1 ? ` x${qty}` : "";
+                      return (
+                        <Line
+                          key={a.id}
+                          label={`${a.name}${qtyLabel} (${days} day${days > 1 ? "s" : ""})`}
+                          value={ZAR(a.daily_rate * days * qty)}
+                        />
+                      );
+                    })}
                     {selectedAssets.length > 0 && (
                       <>
                         <Line label="Delivery cost" value={ZAR(price.delivery)} />

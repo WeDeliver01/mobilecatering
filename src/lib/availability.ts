@@ -28,7 +28,7 @@ export function windowAvailability(args: {
   const consumed: Record<string, number> = {};
   for (const b of live) {
     for (const day of occupiedDays(b.start_date, b.end_date)) {
-      consumed[day] = (consumed[day] || 0) + 1;
+      consumed[day] = (consumed[day] || 0) + (b.quantity || 1);
     }
   }
 

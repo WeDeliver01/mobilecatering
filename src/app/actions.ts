@@ -13,6 +13,7 @@ import { billedDays, iso, today, addDays } from "@/lib/dates";
 import { generateQuoteCode, uid } from "@/lib/quote";
 import { notifyQuoteCreated, notifyBookingRequested } from "@/lib/notifications/send";
 import { createCheckout, getProvider, type PaymentMethod } from "@/lib/payments";
+import { ASSET_TYPE_META, assetTypeLabel, isQuantityCapable } from "@/lib/assetTypes";
 import type { AssetType, BookingStatus, Booking, QuoteSnapshot, OrderItem, ConsentMethod } from "@/lib/types";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -25,7 +26,7 @@ export interface ConsentInput {
 }
 
 export interface BookingInput {
-  items: { assetType: AssetType; assetId: string }[];
+  items: { assetType: AssetType; assetId: string; quantity?: number }[];
   start: string;
   end: string;
   deliveryTime: string;
@@ -84,15 +85,22 @@ async function buildOrder(
   let base = 0;
 
   for (const item of input.items) {
+    const quantity = isQuantityCapable(item.assetType) ? Math.max(1, Math.floor(item.quantity ?? 1)) : 1;
+
     const avail = windowAvailability({
       assets, bookings: existingBookings, type: item.assetType, start: input.start, end: input.end,
     });
-    if (avail.status === "unavailable") return { error: `Those dates are fully booked for ${item.assetType}.` };
+    const shortDay = avail.days.find((d) => d.free < quantity);
+    if (shortDay) {
+      return quantity > 1
+        ? { error: `Only ${shortDay.free} ${assetTypeLabel(item.assetType).toLowerCase()} available on ${shortDay.date}, you asked for ${quantity}.` }
+        : { error: `Those dates are fully booked for ${assetTypeLabel(item.assetType)}.` };
+    }
 
     const asset = await getAssetById(item.assetId);
     if (!asset || !asset.active) return { error: "One of the selected units is not available." };
 
-    const itemTotal = asset.daily_rate * days;
+    const itemTotal = asset.daily_rate * days * quantity;
     base += itemTotal;
     bookings.push({
       id: uid(),
@@ -105,6 +113,7 @@ async function buildOrder(
       delivery_time: input.deliveryTime.trim(),
       collection_time: input.collectionTime.trim(),
       days,
+      quantity,
       status,
       price_total: itemTotal,
       delivery_address: address,
@@ -186,7 +195,7 @@ export async function createBookingAction(input: BookingInput) {
   notifyBookingRequested({
     orderId: order.orderId, paymentReference: reference, customer: customerName, customerEmail,
     items: order.bookings.map((b) => ({
-      assetName: b.asset_type === "fridge" ? "Mobile Fridge" : "Double Toilet",
+      assetName: assetTypeLabel(b.asset_type) + (b.quantity > 1 ? ` x${b.quantity}` : ""),
     })),
     startDate: order.bookings[0].start_date, endDate: order.bookings[0].end_date,
     deliveryAddress: order.bookings[0].delivery_address, total: order.total,
@@ -209,8 +218,9 @@ export async function createQuoteAction(input: BookingInput) {
   for (const item of input.items) {
     const asset = await getAssetById(item.assetId);
     if (!asset) return { ok: false as const, error: "Unknown unit." };
-    items.push({ asset_type: item.assetType, asset_id: item.assetId, asset_name: asset.name, daily_rate: asset.daily_rate });
-    base += asset.daily_rate * days;
+    const quantity = isQuantityCapable(item.assetType) ? Math.max(1, Math.floor(item.quantity ?? 1)) : 1;
+    items.push({ asset_type: item.assetType, asset_id: item.assetId, asset_name: asset.name, daily_rate: asset.daily_rate, quantity });
+    base += asset.daily_rate * days * quantity;
   }
 
   const waiverFee = input.waiver ? settings.waiverFee : 0;
@@ -267,7 +277,7 @@ export async function convertQuoteAction(code: string, consent: ConsentInput, pa
 
   const s = quote.snapshot_json;
   const result = await createBookingAction({
-    items: s.items.map((i) => ({ assetType: i.asset_type, assetId: i.asset_id ?? "" })),
+    items: s.items.map((i) => ({ assetType: i.asset_type, assetId: i.asset_id ?? "", quantity: i.quantity })),
     start: s.start_date, end: s.end_date,
     deliveryTime: s.delivery_time, collectionTime: s.collection_time,
     waiver: s.waiver, address: s.delivery_address, billingAddress: s.billing_address,
@@ -300,14 +310,15 @@ export async function setOrderStatusAction(orderOrBookingId: string, status: Boo
 }
 
 export async function addAssetAction(type: AssetType) {
+  const meta = ASSET_TYPE_META[type];
   await addAsset({
     id: uid(),
-    name: type === "fridge" ? "New Fridge Unit" : "New Toilet Unit",
+    name: `New ${meta.label}`,
     type,
-    category_code: type === "fridge" ? "CAT-FR-NEW" : "CAT-TL-NEW",
+    category_code: `${meta.categoryPrefix}-NEW`,
     description: "Newly added unit. Edit details.",
-    quantity_available: 1,
-    daily_rate: type === "fridge" ? 1250 : 950,
+    quantity_available: meta.defaultQuantityAvailable,
+    daily_rate: meta.defaultRate,
     active: true,
     image_url: null,
   });

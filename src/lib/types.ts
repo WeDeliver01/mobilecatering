@@ -1,4 +1,4 @@
-export type AssetType = "fridge" | "toilet";
+export type AssetType = "fridge" | "toilet" | "food_warmer" | "mobile_kitchen" | "marquee_tent" | "chairs";
 export type BookingStatus = "pending" | "confirmed" | "reserved" | "active" | "completed" | "cancelled";
 export type QuoteStatus = "active" | "converted" | "expired";
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
@@ -31,6 +31,7 @@ export interface Booking {
   delivery_time: string; // "HH:MM", informational only, not used in billing
   collection_time: string;
   days: number;
+  quantity: number; // >1 only for quantity-capable types (e.g. chairs); 1 otherwise
   status: BookingStatus;
   price_total: number;
   delivery_address: string;
@@ -49,6 +50,7 @@ export interface OrderItem {
   asset_id: string | null;
   asset_name: string;
   daily_rate: number;
+  quantity: number;
 }
 
 export interface QuoteSnapshot {

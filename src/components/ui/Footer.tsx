@@ -16,7 +16,7 @@ export function Footer({
         </div>
         <div className="text-center">
           <p className="font-body-md text-sm text-on-surface-variant">
-            Mobile fridge &amp; toilet hire across Gauteng. © {new Date().getFullYear()} {tradingName}
+            Mobile catering equipment hire across Gauteng. © {new Date().getFullYear()} {tradingName}
             {legalName && legalName !== tradingName ? `, a trading name of ${legalName}` : ""}.
           </p>
           {address && <p className="font-body-md text-xs text-on-surface-variant mt-1">{address}</p>}

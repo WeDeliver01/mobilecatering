@@ -28,11 +28,12 @@ export interface PriceBreakdown {
 export function computePrice(opts: {
   asset: Pick<Asset, "daily_rate">;
   days: number;
+  quantity?: number; // >1 only for quantity-capable types (e.g. chairs)
   deliveryFee: number;
   waiver: boolean;
   waiverFee: number;
 }): PriceBreakdown {
-  const base = opts.asset.daily_rate * opts.days;
+  const base = opts.asset.daily_rate * opts.days * (opts.quantity ?? 1);
   const waiver = opts.waiver ? opts.waiverFee : 0;
   return { base, delivery: opts.deliveryFee, waiver, total: base + opts.deliveryFee + waiver };
 }

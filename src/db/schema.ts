@@ -28,6 +28,7 @@ export const bookings = pgTable("bookings", {
   delivery_time: text("delivery_time").notNull().default(""), // "HH:MM", informational only
   collection_time: text("collection_time").notNull().default(""),
   days: integer("days").notNull().default(1),
+  quantity: integer("quantity").notNull().default(1),
   status: text("status").notNull().default("pending"),
   price_total: integer("price_total").notNull().default(0),
   delivery_address: text("delivery_address").notNull().default(""),
