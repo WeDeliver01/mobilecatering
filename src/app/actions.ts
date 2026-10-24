@@ -61,6 +61,19 @@ async function resolveDelivery(
   return { dist, deliveryFee, zoneLabel };
 }
 
+// Name, a way to reach them, and where to deliver are required to make a
+// quote or booking actionable at all - checked here as the authoritative
+// gate (the UI also checks this before submitting, but that can be
+// bypassed, so nothing downstream should trust it alone).
+function missingContactDetails(input: BookingInput): string | null {
+  const missing: string[] = [];
+  if (!input.customer.trim()) missing.push("full name");
+  if (!input.customerPhone.trim()) missing.push("contact number");
+  if (!input.address.trim()) missing.push("delivery address");
+  if (missing.length === 0) return null;
+  return `Please provide your ${missing.join(", ")} to continue.`;
+}
+
 // Validates and prices every item in one checkout, returning one Booking row
 // per item (all sharing a fresh order_id) plus the order total. Nothing is
 // inserted here, so a bad item aborts the whole order cleanly.
@@ -72,12 +85,14 @@ async function buildOrder(
   waiverFee: number
 ): Promise<{ orderId: string; bookings: Booking[]; total: number } | { error: string }> {
   if (input.items.length === 0) return { error: "Select at least one unit." };
+  const contactError = missingContactDetails(input);
+  if (contactError) return { error: contactError };
 
   const [assets, existingBookings] = await Promise.all([getAssets(), getBookings()]);
   const days = billedDays(input.start, input.end);
   const orderId = uid();
   const createdAt = new Date().toISOString();
-  const customer = input.customer.trim() || "New customer";
+  const customer = input.customer.trim();
   const address = input.address.trim();
   const siteContact = input.siteContact.trim();
 
@@ -209,6 +224,8 @@ export async function createBookingAction(input: BookingInput) {
 
 export async function createQuoteAction(input: BookingInput) {
   if (input.items.length === 0) return { ok: false as const, error: "Select at least one unit." };
+  const contactError = missingContactDetails(input);
+  if (contactError) return { ok: false as const, error: contactError };
   const days = billedDays(input.start, input.end);
   const settings = await getPricingSettings();
   const { deliveryFee, zoneLabel } = await resolveDelivery(input, settings);
@@ -239,7 +256,7 @@ export async function createQuoteAction(input: BookingInput) {
     address_lat: input.addressLat ?? null,
     address_lon: input.addressLon ?? null,
     site_contact: input.siteContact.trim(),
-    customer: input.customer.trim() || "New customer",
+    customer: input.customer.trim(),
     event_type: input.eventType,
     customer_phone: input.customerPhone.trim(),
     customer_whatsapp: input.customerWhatsapp,

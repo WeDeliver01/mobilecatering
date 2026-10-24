@@ -9,12 +9,13 @@ import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
 const DEBOUNCE_MS = 450;
 
 export function AddressAutocomplete({
-  value, onChange, onSelect, placeholder,
+  value, onChange, onSelect, placeholder, invalid,
 }: {
   value: string;
   onChange: (text: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
   placeholder?: string;
+  invalid?: boolean;
 }) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -70,7 +71,9 @@ export function AddressAutocomplete({
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+        className={`w-full bg-surface border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md ${
+          invalid ? "border-error" : "border-outline"
+        }`}
       />
       {open && suggestions.length > 0 && (
         <ul className="absolute z-20 mt-1 w-full bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-lg">

@@ -160,7 +160,32 @@ export function BookingClient({
     paymentMethod,
   });
 
+  // Name, a way to contact them, and where to deliver are needed for any
+  // quote or booking to actually be actionable - the server enforces the
+  // same thing, this is just so the customer finds out before submitting
+  // instead of after.
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const missingRequiredFields = (): string[] => {
+    const missing: string[] = [];
+    if (!fullName.trim()) missing.push("full name");
+    if (!phone.trim()) missing.push("contact number");
+    if (!address.trim()) missing.push("delivery address");
+    return missing;
+  };
+  const requiredFieldsOk = missingRequiredFields().length === 0;
+
+  const checkRequiredFields = (): boolean => {
+    setAttemptedSubmit(true);
+    const missing = missingRequiredFields();
+    if (missing.length > 0) {
+      setError(`Please fill in your ${missing.join(", ")} to continue.`);
+      return false;
+    }
+    return true;
+  };
+
   const onSave = async () => {
+    if (!checkRequiredFields()) return;
     setSubmitting(true); setError(null);
     const res = await createQuoteAction(payload());
     setSubmitting(false);
@@ -170,7 +195,7 @@ export function BookingClient({
 
   // Both booking and quote-conversion require Terms agreement, so both just
   // queue what to do and open the modal; the modal's onAgree runs it.
-  const onConfirm = () => setPendingAction({ kind: "book" });
+  const onConfirm = () => { if (checkRequiredFields()) setPendingAction({ kind: "book" }); };
   const onConvert = (code: string) => setPendingAction({ kind: "convert", code });
 
   const onAgreeAndContinue = async (consentResult: ConsentResult) => {
@@ -348,12 +373,13 @@ export function BookingClient({
             <section className="space-y-4 pt-4">
               <StepHead n={3} label="Delivery details" />
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-gutter">
-                <Field label="Street address">
+                <Field label="Street address" required>
                   <AddressAutocomplete
                     value={address}
                     onChange={(text) => { setAddress(text); setAddressCoords(null); }}
                     onSelect={(s) => { setAddress(s.formatted); setAddressCoords({ lat: s.lat, lon: s.lon }); }}
                     placeholder="e.g. 152 Jan Smuts Ave, Rosebank"
+                    invalid={attemptedSubmit && !address.trim()}
                   />
                   <p className="text-xs text-on-surface-variant">
                     {addressCoords
@@ -397,19 +423,23 @@ export function BookingClient({
             <section className="space-y-4 pt-4">
               <StepHead n={4} label="Your details" />
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 space-y-gutter">
-                <Field label="Full name">
+                <Field label="Full name" required>
                   <input
                     type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
                     placeholder="e.g. Thandi Mokoena"
-                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                    className={`w-full bg-surface border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md ${
+                      attemptedSubmit && !fullName.trim() ? "border-error" : "border-outline"
+                    }`}
                   />
                 </Field>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-                  <Field label="Contact number">
+                  <Field label="Contact number" required>
                     <input
                       type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                       placeholder="082 123 4567"
-                      className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
+                      className={`w-full bg-surface border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md ${
+                        attemptedSubmit && !phone.trim() ? "border-error" : "border-outline"
+                      }`}
                     />
                     <label className="flex items-center gap-2 mt-2 text-sm text-on-surface-variant cursor-pointer">
                       <input type="checkbox" checked={whatsapp} onChange={(e) => setWhatsapp(e.target.checked)} className="rounded border-outline" />
@@ -586,10 +616,12 @@ function StepHead({ n, label }: { n: number; label: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <label className="font-label-md text-label-md text-on-surface-variant block uppercase tracking-wider">{label}</label>
+      <label className="font-label-md text-label-md text-on-surface-variant block uppercase tracking-wider">
+        {label}{required && <span className="text-error"> *</span>}
+      </label>
       {children}
     </div>
   );
