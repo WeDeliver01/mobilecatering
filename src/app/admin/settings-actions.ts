@@ -25,8 +25,24 @@ async function saveUpload(file: File): Promise<{ ok: true; url: string } | { ok:
   if (file.size > MAX_BYTES) return { ok: false, error: "Image must be under 5MB." };
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
   const filename = `${uid()}.${ext}`;
+  const dest = path.join(UPLOAD_DIR, filename);
   const bytes = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(path.join(UPLOAD_DIR, filename), bytes);
+  await fs.writeFile(dest, bytes);
+
+  // Re-stat before ever handing back a URL to save against an asset: a write
+  // that silently lands short (disk full, a restart racing the write) must
+  // surface as an upload error, not a DB row pointing at a file that was
+  // never really there.
+  try {
+    const written = await fs.stat(dest);
+    if (written.size !== bytes.length) {
+      await fs.unlink(dest).catch(() => {});
+      return { ok: false, error: "Upload did not save correctly, please try again." };
+    }
+  } catch {
+    return { ok: false, error: "Upload did not save correctly, please try again." };
+  }
+
   return { ok: true, url: `/uploads/${filename}` };
 }
 
