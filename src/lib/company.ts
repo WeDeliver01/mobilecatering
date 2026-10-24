@@ -17,7 +17,7 @@ export interface CompanySettings {
 // in the real values from Admin > Settings > Business details.
 export const DEFAULT_COMPANY: CompanySettings = {
   legalName: "MOSSANNAH",
-  tradingName: "Mobile Catering",
+  tradingName: "Mobile Catering Trailers",
   registrationNumber: "",
   vatNumber: "",
   address: "1054 Block H, Soshanguve, Gauteng",

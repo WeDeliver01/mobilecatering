@@ -34,7 +34,7 @@ export default async function GalleryPage() {
             {images.map((img) => (
               <figure key={img.id} className="rounded-xl overflow-hidden border border-outline-variant">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url} alt={img.caption || "Mobile Catering event photo"} className="w-full h-48 object-cover" />
+                <img src={img.url} alt={img.caption || "Mobile Catering Trailers event photo"} className="w-full h-48 object-cover" />
                 {img.caption && (
                   <figcaption className="px-3 py-2 text-sm text-on-surface-variant">{img.caption}</figcaption>
                 )}

@@ -163,7 +163,7 @@ export async function createBookingAction(input: BookingInput) {
   const checkout = await createCheckout(method, {
     orderId: order.orderId, reference, amount: order.total,
     customerName, customerEmail, customerPhone: order.bookings[0].customer_phone,
-    description: `Mobile Catering order ${reference}`,
+    description: `Mobile Catering Trailers order ${reference}`,
     returnUrl: `${SITE_URL}/consent/${order.orderId}`,
   });
   if (!checkout.ok) return { ok: false as const, error: checkout.error };
@@ -177,7 +177,7 @@ export async function createBookingAction(input: BookingInput) {
     }),
     insertDelivery({
       id: uid(), order_id: order.orderId, booking_id: firstId,
-      origin_address: "Mobile Catering Depot, 1054 Block H, Soshanguve",
+      origin_address: "Mobile Catering Trailers Depot, 1054 Block H, Soshanguve",
       destination_address: order.bookings[0].delivery_address,
       distance_km: dist ? Math.round(dist.distanceKm) : null,
       duration_minutes: dist ? dist.durationMinutes : null,

@@ -4,10 +4,13 @@ import { TopNav } from "@/components/ui/TopNav";
 import { Footer } from "@/components/ui/Footer";
 import { getCompanySettings } from "@/db/repo";
 
-export const metadata: Metadata = {
-  title: "Mobile Catering | Event Logistics Booking",
-  description: "Mobile catering equipment hire across Gauteng: fridges, toilets, food warmers, mobile kitchens, marquee tents and chairs.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const company = await getCompanySettings();
+  return {
+    title: `${company.tradingName} | Event Logistics Booking`,
+    description: "Mobile catering equipment hire across Gauteng: fridges, toilets, food warmers, mobile kitchens, marquee tents and chairs.",
+  };
+}
 
 // The layout now reads company settings from the embedded DB (for the
 // footer/nav branding), so every route needs a live DB connection rather
@@ -28,7 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body className="bg-background text-on-surface font-body-md min-h-screen flex flex-col">
-        <TopNav phone={company.phone} />
+        <TopNav phone={company.phone} brandName={company.tradingName} />
         <main className="flex-grow">{children}</main>
         <Footer tradingName={company.tradingName} legalName={company.legalName} phone={company.phone} address={company.address} email={company.email} />
       </body>
