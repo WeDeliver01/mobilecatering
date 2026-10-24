@@ -241,7 +241,7 @@ export function BookingClient({
                       </span>
                       {a.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={a.image_url} alt={a.name} className="w-full h-32 object-cover rounded-lg mb-3" />
+                        <img src={a.image_url} alt={a.name} className="w-full h-48 object-cover rounded-lg mb-3" />
                       ) : (
                         <div className="flex items-center justify-between mb-3">
                           <span className="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface">

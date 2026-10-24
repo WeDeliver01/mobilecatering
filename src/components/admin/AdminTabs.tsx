@@ -401,7 +401,7 @@ function AssetCard({
   return (
     <div className="bg-surface-container-lowest p-stack-md rounded-xl custom-shadow flex flex-col border border-outline-variant/30">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <div className="w-full h-32 rounded-lg bg-surface-container-low mb-stack-md overflow-hidden flex items-center justify-center">
+      <div className="w-full h-48 rounded-lg bg-surface-container-low mb-stack-md overflow-hidden flex items-center justify-center">
         {asset.image_url ? (
           <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" />
         ) : (
