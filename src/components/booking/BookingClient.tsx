@@ -155,6 +155,12 @@ export function BookingClient({
 
   const placeholderDays = occupiedDays(start, end);
 
+  // Prefer a photo of whatever's selected; otherwise show any real unit
+  // photo that's been uploaded (Admin > Assets), so this never shows a
+  // stock/fake image, only what's actually on file for the fleet.
+  const heroAsset = selectedAssets.find((a) => a.image_url) ?? assets.find((a) => a.image_url);
+  const heroImage = heroAsset?.image_url ? { url: heroAsset.image_url, alt: heroAsset.name } : null;
+
   return (
     <div id="top">
       {/* Hero */}
@@ -173,7 +179,16 @@ export function BookingClient({
               <Check label="Across Gauteng" />
             </div>
           </div>
-          <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-5">
+          <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
+            {heroImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={heroImage.url} alt={heroImage.alt} className="w-full h-40 object-cover" />
+            ) : (
+              <div className="w-full h-40 bg-surface-container-low flex items-center justify-center text-on-surface-variant">
+                <Icon name={selectedTypes[0] ? TYPE_META[selectedTypes[0]].icon : "ac_unit"} className="text-5xl opacity-30" />
+              </div>
+            )}
+            <div className="p-5">
             <div className="flex justify-between text-[11px] uppercase tracking-wider font-label-md text-on-surface-variant">
               <span>Fleet readiness</span><span className="text-tertiary">Live</span>
             </div>
@@ -227,6 +242,7 @@ export function BookingClient({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       </section>

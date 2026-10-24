@@ -29,7 +29,7 @@ function seedAssets() {
       quantity_available: 1,
       daily_rate: 950,
       active: true,
-      image_url: null,
+      image_url: "/images/double-toilet-trailer.jpg",
     },
   ];
 }
