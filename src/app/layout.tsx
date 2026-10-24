@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { TopNav } from "@/components/ui/TopNav";
 import { Footer } from "@/components/ui/Footer";
+import { getCompanySettings } from "@/db/repo";
 
 export const metadata: Metadata = {
   title: "Mobile Catering | Event Logistics Booking",
   description: "Mobile fridge and toilet hire across Gauteng.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// The layout now reads company settings from the embedded DB (for the
+// footer/nav branding), so every route needs a live DB connection rather
+// than a static prerender; the embedded PGlite instance can't be opened by
+// multiple concurrent static-generation workers.
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const company = await getCompanySettings();
   return (
     <html lang="en" className="light">
       <head>
@@ -20,9 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="bg-background text-on-surface font-body-md min-h-screen flex flex-col">
-        <TopNav />
+        <TopNav phone={company.phone} />
         <main className="flex-grow">{children}</main>
-        <Footer />
+        <Footer tradingName={company.tradingName} legalName={company.legalName} phone={company.phone} address={company.address} email={company.email} />
       </body>
     </html>
   );

@@ -5,9 +5,10 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import {
   updateAsset, upsertSiteContent, updatePricingSettings,
-  addGalleryImage, deleteGalleryImage, getGalleryImages,
+  addGalleryImage, deleteGalleryImage, getGalleryImages, updateCompanySettings,
 } from "@/db/repo";
 import { uid } from "@/lib/quote";
+import type { CompanySettings } from "@/lib/company";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -72,6 +73,14 @@ export async function updatePricingSettingsAction(patch: {
 export async function updateSiteContentAction(slug: string, title: string, body: string) {
   await upsertSiteContent(slug, title, body);
   revalidatePath("/admin");
+  revalidatePath("/gallery");
+  return { ok: true as const };
+}
+
+export async function updateCompanySettingsAction(patch: Partial<CompanySettings>) {
+  await updateCompanySettings(patch);
+  revalidatePath("/admin");
+  revalidatePath("/");
   revalidatePath("/gallery");
   return { ok: true as const };
 }

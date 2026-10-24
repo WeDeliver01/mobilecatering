@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Asset, AssetType, Booking, BookingStatus, Quote, SiteContent, GalleryImage, Payment } from "@/lib/types";
 import type { PricingSettings } from "@/lib/pricing";
+import type { CompanySettings } from "@/lib/company";
 import { groupOrders, type Order } from "@/lib/order";
 import { ZAR, ZARk } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
@@ -12,14 +13,14 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { setOrderStatusAction, updateAssetAction, addAssetAction } from "@/app/actions";
 import {
   updatePricingSettingsAction, updateSiteContentAction,
-  uploadAssetImageAction, addGalleryImageAction, deleteGalleryImageAction,
+  uploadAssetImageAction, addGalleryImageAction, deleteGalleryImageAction, updateCompanySettingsAction,
 } from "@/app/admin/settings-actions";
 
 type Tab = "overview" | "bookings" | "assets" | "settings";
 const TYPE_ICON: Record<AssetType, string> = { fridge: "ac_unit", toilet: "wc" };
 
 export function AdminTabs({
-  assets, bookings, payments, quotes, todayIso, pricing, siteContent, galleryImages,
+  assets, bookings, payments, quotes, todayIso, pricing, siteContent, galleryImages, company,
 }: {
   assets: Asset[];
   bookings: Booking[];
@@ -29,6 +30,7 @@ export function AdminTabs({
   pricing: PricingSettings;
   siteContent: SiteContent[];
   galleryImages: GalleryImage[];
+  company: CompanySettings;
 }) {
   const orders = useMemo(() => groupOrders(bookings, payments), [bookings, payments]);
   const [tab, setTab] = useState<Tab>("overview");
@@ -58,7 +60,7 @@ export function AdminTabs({
       {tab === "overview" && <Overview assets={assets} orders={orders} quotes={quotes} todayIso={todayIso} />}
       {tab === "bookings" && <Bookings assets={assets} orders={orders} />}
       {tab === "assets" && <Assets assets={assets} />}
-      {tab === "settings" && <Settings pricing={pricing} siteContent={siteContent} galleryImages={galleryImages} />}
+      {tab === "settings" && <Settings pricing={pricing} siteContent={siteContent} galleryImages={galleryImages} company={company} />}
     </div>
   );
 }
@@ -407,18 +409,108 @@ function AssetCard({
 
 /* ---------------- Settings ---------------- */
 function Settings({
-  pricing, siteContent, galleryImages,
+  pricing, siteContent, galleryImages, company,
 }: {
   pricing: PricingSettings;
   siteContent: SiteContent[];
   galleryImages: GalleryImage[];
+  company: CompanySettings;
 }) {
   return (
     <div className="space-y-stack-lg max-w-3xl">
+      <BusinessDetailsForm company={company} />
       <PricingForm pricing={pricing} />
       <ContentEditor slug="about" title="About" initial={siteContent.find((c) => c.slug === "about")} />
       <ContentEditor slug="terms" title="Terms & policies" initial={siteContent.find((c) => c.slug === "terms")} />
       <GalleryManager images={galleryImages} />
+    </div>
+  );
+}
+
+function BusinessDetailsForm({ company }: { company: CompanySettings }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [form, setForm] = useState<CompanySettings>(company);
+  const [saved, setSaved] = useState(false);
+  const dirty = (Object.keys(form) as (keyof CompanySettings)[]).some((k) => form[k] !== company[k]);
+
+  const set = (k: keyof CompanySettings) => (v: string) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setSaved(false);
+  };
+
+  const save = () =>
+    startTransition(async () => {
+      await updateCompanySettingsAction(form);
+      setSaved(true);
+      router.refresh();
+    });
+
+  return (
+    <section className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-md space-y-stack-md">
+      <div>
+        <h2 className="font-headline-md text-headline-md">Business details</h2>
+        <p className="text-sm text-on-surface-variant">
+          Used on emails, the website footer, invoices and the Terms &amp; Policies page.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-gutter">
+        <TextField label="Trading name" value={form.tradingName} onChange={set("tradingName")} />
+        <TextField label="Registered legal name" value={form.legalName} onChange={set("legalName")} />
+        <TextField label="Company registration number" value={form.registrationNumber} onChange={set("registrationNumber")} />
+        <TextField label="VAT number" value={form.vatNumber} onChange={set("vatNumber")} />
+        <TextField label="Company email" value={form.email} onChange={set("email")} type="email" />
+        <TextField label="Company phone" value={form.phone} onChange={set("phone")} />
+        <TextField
+          label="Admin notification email"
+          value={form.adminNotifyEmail}
+          onChange={set("adminNotifyEmail")}
+          type="email"
+          hint="Where quote/booking/payment alerts go. Falls back to company email if left blank."
+        />
+      </div>
+      <TextField label="Registered address" value={form.address} onChange={set("address")} />
+
+      <div className="pt-2 border-t border-outline-variant">
+        <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mt-stack-md mb-3">
+          Bank details (for manual EFT payments)
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-gutter">
+          <TextField label="Bank name" value={form.bankName} onChange={set("bankName")} />
+          <TextField label="Account holder" value={form.bankAccountName} onChange={set("bankAccountName")} />
+          <TextField label="Account number" value={form.bankAccountNumber} onChange={set("bankAccountNumber")} />
+          <TextField label="Branch code" value={form.bankBranchCode} onChange={set("bankBranchCode")} />
+        </div>
+      </div>
+
+      <button
+        onClick={save} disabled={!dirty || pending}
+        className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-sm font-bold hover:opacity-90 transition-all disabled:opacity-40"
+      >
+        {saved && !dirty ? "Saved" : pending ? "Saving..." : "Save business details"}
+      </button>
+    </section>
+  );
+}
+
+function TextField({
+  label, value, onChange, type = "text", hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-xs font-label-md text-on-surface-variant uppercase tracking-wider">{label}</label>
+      <input
+        type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg border border-outline bg-surface focus:ring-1 focus:ring-primary focus:border-primary font-body-md"
+      />
+      {hint && <p className="text-xs text-on-surface-variant">{hint}</p>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { getGalleryImages, getSiteContent } from "@/db/repo";
+import { getGalleryImages, getSiteContent, getCompanySettings } from "@/db/repo";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +14,11 @@ function Paragraphs({ text }: { text: string }) {
 }
 
 export default async function GalleryPage() {
-  const [images, about, terms] = await Promise.all([
+  const [images, about, terms, company] = await Promise.all([
     getGalleryImages(),
     getSiteContent("about"),
     getSiteContent("terms"),
+    getCompanySettings(),
   ]);
 
   return (
@@ -51,6 +52,17 @@ export default async function GalleryPage() {
       <section id="terms" className="space-y-4 scroll-mt-32">
         <h2 className="font-headline-lg text-headline-lg text-on-surface">{terms?.title || "Terms & policies"}</h2>
         <Paragraphs text={terms?.body || "No content yet."} />
+        <div className="pt-4 border-t border-outline-variant text-sm text-on-surface-variant space-y-1">
+          <p className="font-label-md text-on-surface">
+            {company.tradingName}
+            {company.legalName && company.legalName !== company.tradingName ? ` (registered as ${company.legalName})` : ""}
+          </p>
+          {company.registrationNumber && <p>Company registration: {company.registrationNumber}</p>}
+          {company.vatNumber && <p>VAT number: {company.vatNumber}</p>}
+          {company.address && <p>{company.address}</p>}
+          {company.email && <p>{company.email}</p>}
+          {company.phone && <p>{company.phone}</p>}
+        </div>
       </section>
     </div>
   );

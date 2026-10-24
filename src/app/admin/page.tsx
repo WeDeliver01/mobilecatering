@@ -1,6 +1,6 @@
 import {
   getAssets, getBookings, getPayments, getQuotes, expireOldQuotes,
-  getPricingSettings, getAllSiteContent, getGalleryImages,
+  getPricingSettings, getAllSiteContent, getGalleryImages, getCompanySettings,
 } from "@/db/repo";
 import { AdminTabs } from "@/components/admin/AdminTabs";
 import { AdminLogoutButton } from "@/components/ui/AdminLogoutButton";
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   await expireOldQuotes();
-  const [assets, bookings, payments, quotes, pricing, siteContent, galleryImages] = await Promise.all([
-    getAssets(), getBookings(), getPayments(), getQuotes(), getPricingSettings(), getAllSiteContent(), getGalleryImages(),
+  const [assets, bookings, payments, quotes, pricing, siteContent, galleryImages, company] = await Promise.all([
+    getAssets(), getBookings(), getPayments(), getQuotes(), getPricingSettings(), getAllSiteContent(), getGalleryImages(), getCompanySettings(),
   ]);
   return (
     <div className="max-w-7xl mx-auto w-full px-container-padding py-stack-lg">
@@ -25,7 +25,7 @@ export default async function AdminPage() {
       </div>
       <AdminTabs
         assets={assets} bookings={bookings} payments={payments} quotes={quotes} todayIso={iso(today())}
-        pricing={pricing} siteContent={siteContent} galleryImages={galleryImages}
+        pricing={pricing} siteContent={siteContent} galleryImages={galleryImages} company={company}
       />
     </div>
   );

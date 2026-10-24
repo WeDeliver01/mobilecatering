@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
-import { getBookingById, getInvoiceByBookingId } from "@/db/repo";
+import { getBookingById, getInvoiceByBookingId, getCompanySettings } from "@/db/repo";
 import { ZAR } from "@/lib/format";
 import { prettyDate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 export default async function InvoicePage({ params }: { params: { bookingId: string } }) {
-  const [booking, invoice] = await Promise.all([getBookingById(params.bookingId), getInvoiceByBookingId(params.bookingId)]);
+  const [booking, invoice, company] = await Promise.all([
+    getBookingById(params.bookingId), getInvoiceByBookingId(params.bookingId), getCompanySettings(),
+  ]);
   if (!booking || !invoice) notFound();
   return (
     <main className="max-w-2xl mx-auto px-container-padding py-stack-lg">
@@ -15,10 +17,13 @@ export default async function InvoicePage({ params }: { params: { bookingId: str
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2.5 font-headline-md text-lg text-on-surface font-extrabold">
               <span className="w-[30px] h-[30px] rounded-lg bg-primary text-on-primary grid place-items-center text-sm font-extrabold">M</span>
-              MOBILE CATERING
+              {company.tradingName.toUpperCase()}
             </div>
             <p className="text-sm text-on-surface-variant">Mobile fridge &amp; toilet hire</p>
-            <p className="text-xs text-on-surface-variant">MOSSANNAH, trading as Mobile Catering</p>
+            <p className="text-xs text-on-surface-variant">
+              {company.legalName}{company.legalName !== company.tradingName ? `, trading as ${company.tradingName}` : ""}
+            </p>
+            {company.vatNumber && <p className="text-xs text-on-surface-variant">VAT {company.vatNumber}</p>}
           </div>
           <div className="text-right flex flex-col gap-1">
             <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Tax invoice</p>

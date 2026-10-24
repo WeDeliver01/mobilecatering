@@ -10,7 +10,7 @@ const links = [
   { href: "/gallery#terms", label: "Terms & policies" },
 ];
 
-export function TopNav() {
+export function TopNav({ phone }: { phone: string }) {
   const path = usePathname();
   const isActive = (href: string) =>
     href === "/" ? path === "/" : href !== "#" && path.startsWith(href.split("#")[0]) && href !== "/";
@@ -36,7 +36,11 @@ export function TopNav() {
           ))}
         </div>
         <div className="flex items-center gap-4">
-          <a href="tel:+27115550123" className="hidden lg:inline-flex text-sm text-on-surface-variant font-medium whitespace-nowrap">+27 (0)11 555 0123</a>
+          {phone && (
+            <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className="hidden lg:inline-flex text-sm text-on-surface-variant font-medium whitespace-nowrap">
+              {phone}
+            </a>
+          )}
           <Link
             href="/#quote-calculator"
             className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-md text-label-md font-bold hover:opacity-90 transition-all whitespace-nowrap"
