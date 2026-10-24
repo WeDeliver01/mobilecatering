@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Asset, AssetType, AvailabilityResult, AvailabilityVerdict, Booking } from "@/lib/types";
 import { EVENT_TYPES } from "@/lib/types";
@@ -14,6 +14,7 @@ import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
 import type { AddressSuggestion } from "@/app/api/geocode/autocomplete/route";
 import { createBookingAction, createQuoteAction, convertQuoteAction, type BookingInput, type ConsentInput } from "@/app/actions";
 import { TermsConsentModal, type ConsentResult } from "@/components/booking/TermsConsentModal";
+import { DatePicker, type CalendarDayInfo } from "@/components/booking/DatePicker";
 import type { PaymentMethod } from "@/lib/payments";
 import { ASSET_TYPE_META, isQuantityCapable } from "@/lib/assetTypes";
 
@@ -80,6 +81,38 @@ export function BookingClient({
   };
 
   const quantityFor = (t: AssetType) => (isQuantityCapable(t) ? quantities[t] ?? 1 : 1);
+
+  // Per-day "fully booked" / "limited" map for the date-picker calendars,
+  // merged across every currently selected type (the whole order needs all
+  // of them on the same dates, so a day unavailable for any one of them is
+  // unavailable for the booking). Fetched a month at a time and cached, so
+  // flipping between months already seen costs nothing.
+  const [calendarByDate, setCalendarByDate] = useState<Record<string, CalendarDayInfo>>({});
+  const loadedMonthsRef = useRef<Set<string>>(new Set());
+  const selectedTypesKey = selectedTypes.join(",");
+
+  useEffect(() => {
+    loadedMonthsRef.current = new Set();
+    setCalendarByDate({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTypesKey]);
+
+  const ensureCalendarMonth = (monthStart: string, monthEnd: string) => {
+    if (selectedTypes.length === 0) return;
+    const key = `${selectedTypesKey}|${monthStart.slice(0, 7)}`;
+    if (loadedMonthsRef.current.has(key)) return;
+    loadedMonthsRef.current.add(key);
+    fetch(`/api/availability/calendar?types=${selectedTypesKey}&start=${monthStart}&end=${monthEnd}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { days: (CalendarDayInfo & { date: string })[] }) => {
+        setCalendarByDate((prev) => {
+          const next = { ...prev };
+          for (const d of data.days) next[d.date] = { fullyBooked: d.fullyBooked, limited: d.limited };
+          return next;
+        });
+      })
+      .catch(() => { loadedMonthsRef.current.delete(key); });
+  };
 
   useEffect(() => {
     let cancel = false;
@@ -281,20 +314,16 @@ export function BookingClient({
             <section className="space-y-4 pt-4">
               <StepHead n={2} label="Select dates & times" />
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 grid grid-cols-1 md:grid-cols-2 gap-gutter">
-                <Field label="Delivery date">
-                  <input
-                    type="date" value={start} min={minDate}
-                    onChange={(e) => { setStart(e.target.value); if (e.target.value > end) setEnd(e.target.value); }}
-                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
-                  />
-                </Field>
-                <Field label="Collection date">
-                  <input
-                    type="date" value={end} min={start}
-                    onChange={(e) => setEnd(e.target.value)}
-                    className="w-full bg-surface border-outline border rounded-lg px-4 py-3 focus:ring-1 focus:ring-primary focus:border-primary transition-all font-body-md"
-                  />
-                </Field>
+                <DatePicker
+                  label="Delivery date" value={start} minDate={minDate}
+                  onChange={(v) => { setStart(v); if (v > end) setEnd(v); }}
+                  calendarByDate={calendarByDate} onVisibleMonthChange={ensureCalendarMonth}
+                />
+                <DatePicker
+                  label="Collection date" value={end} minDate={start}
+                  onChange={setEnd}
+                  calendarByDate={calendarByDate} onVisibleMonthChange={ensureCalendarMonth}
+                />
                 <Field label="Delivery time">
                   <input
                     type="time" value={deliveryTime}
